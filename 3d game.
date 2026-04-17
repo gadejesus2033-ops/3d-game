@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mini Minecraft</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Light
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5,10,5);
+scene.add(light);
+
+// Block (cube)
+const geometry = new THREE.BoxGeometry();
+const material = new THREE.MeshStandardMaterial({ color: 0x55aa55 });
+
+// Create a flat world
+for (let x = -10; x < 10; x++) {
+  for (let z = -10; z < 10; z++) {
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(x, 0, z);
+    scene.add(cube);
+  }
+}
+
+camera.position.set(0, 5, 10);
+
+// Movement controls
+document.addEventListener('keydown', (e) => {
+  const speed = 0.5;
+  if (e.key === 'w') camera.position.z -= speed;
+  if (e.key === 's') camera.position.z += speed;
+  if (e.key === 'a') camera.position.x -= speed;
+  if (e.key === 'd') camera.position.x += speed;
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>
