@@ -1,120 +1,335 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Playable Mini Minecraft</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    #crosshair {
-      position: fixed;
-      top: 50%; left: 50%;
-      width: 10px; height: 10px;
-      margin-left: -5px; margin-top: -5px;
-      background: white;
-      border-radius: 50%;
-    }
-  </style>
+<title>Ball Arena</title>
+<style>
+body { margin:0; background:#111; color:white; text-align:center; overflow:hidden; }
+canvas { background:#222; display:block; margin:auto; }
+button { padding:10px; margin:5px; }
+</style>
 </head>
 <body>
-<div id="crosshair"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/controls/PointerLockControls.js"></script>
+<h2>Ball Arena 🎮</h2>
+<button onclick="startGame()">Start Game</button>
+<div id="stats"></div>
+
+<canvas id="game" width="1000" height="600"></canvas>
 
 <script>
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+// =====================
+// GLOBAL SETTINGS
+// =====================
+const SLOW = 0.1;
 
-// LIGHT
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5,10,5);
-scene.add(light);
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-// BLOCK SETUP
-const geometry = new THREE.BoxGeometry();
-const material = new THREE.MeshStandardMaterial({ color: 0x55aa55 });
-const blocks = [];
+let level = 1;
+let gameState = "menu";
+let cameraX = 0;
 
-// CREATE WORLD
-for (let x = -20; x < 20; x++) {
-  for (let z = -20; z < 20; z++) {
-    const cube = new THREE.Mesh(geometry, material);
-    cube.position.set(x, 0, z);
-    scene.add(cube);
-    blocks.push(cube);
-  }
-}
+// =====================
+// PLAYER
+// =====================
+let player = {
+  x:100,y:400,
+  vx:0,vy:0,
+  r:15,
+  speed:0.6 * SLOW,
+  jump:-13 * SLOW,
+  gravity:0.6 * SLOW,
+  onGround:false,
+  energy:100
+};
 
-// CONTROLS
-const controls = new THREE.PointerLockControls(camera, document.body);
-document.body.addEventListener('click', () => controls.lock());
-scene.add(controls.getObject());
-camera.position.y = 2;
+let keys = {};
+let jumpPressed = false;
 
-// MOVEMENT
-let move = { forward:false, back:false, left:false, right:false };
-const speed = 0.1;
+// =====================
+// WORLD
+// =====================
+let platforms = [];
+let enemies = [];
+let boss = null;
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'w') move.forward = true;
-  if (e.key === 's') move.back = true;
-  if (e.key === 'a') move.left = true;
-  if (e.key === 'd') move.right = true;
-});
-document.addEventListener('keyup', e => {
-  if (e.key === 'w') move.forward = false;
-  if (e.key === 's') move.back = false;
-  if (e.key === 'a') move.left = false;
-  if (e.key === 'd') move.right = false;
-});
+let portal = { x:1800, y:430, w:80, h:120 };
 
-// RAYCAST (for block interaction)
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2(0, 0);
+// =====================
+// INPUT
+// =====================
+document.addEventListener("keydown", e=>{
+  keys[e.key]=true;
 
-// BREAK / PLACE
-document.addEventListener('mousedown', (event) => {
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(blocks);
-
-  if (intersects.length > 0) {
-    const hit = intersects[0];
-
-    if (event.button === 0) {
-      // LEFT CLICK = remove
-      scene.remove(hit.object);
-      blocks.splice(blocks.indexOf(hit.object), 1);
+  if(e.key===" " && !jumpPressed){
+    if(player.onGround){
+      player.vy = player.jump;
+      player.onGround=false;
     }
-
-    if (event.button === 2) {
-      // RIGHT CLICK = place
-      const newBlock = new THREE.Mesh(geometry, material);
-      newBlock.position.copy(hit.object.position).add(hit.face.normal);
-      scene.add(newBlock);
-      blocks.push(newBlock);
-    }
+    jumpPressed=true;
   }
 });
 
-// PREVENT RIGHT CLICK MENU
-document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener("keyup", e=>{
+  keys[e.key]=false;
+  if(e.key===" ") jumpPressed=false;
+});
 
-// GAME LOOP
-function animate() {
-  requestAnimationFrame(animate);
+// =====================
+// LEVELS
+// =====================
+function generateLevel(){
+  platforms=[];
+  enemies=[];
+  boss=null;
 
-  if (move.forward) controls.moveForward(speed);
-  if (move.back) controls.moveForward(-speed);
-  if (move.left) controls.moveRight(-speed);
-  if (move.right) controls.moveRight(speed);
+  platforms.push({x:0,y:550,w:2000,h:50});
 
-  renderer.render(scene, camera);
+  if(level===1){
+    platforms.push({x:300,y:500,w:120,h:20});
+    platforms.push({x:600,y:450,w:120,h:20});
+  }
+
+  if(level===2){
+    for(let i=0;i<5;i++){
+      platforms.push({x:300+i*200,y:500-i*40,w:120,h:20});
+    }
+  }
+
+  if(level===3){
+    for(let i=0;i<5;i++){
+      platforms.push({x:300+i*300,y:500,w:120,h:20});
+    }
+  }
+
+  if(level===4){
+    for(let i=0;i<5;i++){
+      platforms.push({x:600,y:500-i*80,w:120,h:20});
+    }
+  }
+
+  if(level===5){
+    platforms.push({x:1200,y:400,w:200,h:20});
+  }
+
+  portal.x=1800;
+  portal.y=430;
+
+  if(level<5){
+    for(let i=0;i<level+2;i++){
+      enemies.push({
+        x:400+i*200,
+        y:520,
+        dir:1,
+        speed:1.2 * SLOW
+      });
+    }
+  }else{
+    boss={x:1500,y:300,r:25,hp:40};
+  }
 }
-animate();
+
+// =====================
+// PLAYER MOVE
+// =====================
+function movePlayer(){
+  if(keys["ArrowLeft"]) player.vx -= player.speed;
+  if(keys["ArrowRight"]) player.vx += player.speed;
+
+  player.vx *= 0.9;
+
+  if(!keys[" "] && player.vy < 0){
+    player.vy += 0.4 * SLOW;
+  }
+
+  player.vy += player.gravity;
+
+  player.x += player.vx;
+  player.y += player.vy;
+
+  player.onGround=false;
+
+  platforms.forEach(p=>{
+    if(player.vy >= 0 &&
+       player.x > p.x &&
+       player.x < p.x+p.w &&
+       player.y + player.r > p.y &&
+       player.y + player.r < p.y + 20){
+      player.y = p.y - player.r;
+      player.vy = 0;
+      player.onGround = true;
+    }
+  });
+
+  if(player.y > 550-player.r){
+    player.y = 550-player.r;
+    player.vy = 0;
+    player.onGround = true;
+  }
+
+  if(player.x < 0) player.x = 0;
+  if(player.x > 2000) player.x = 2000;
+}
+
+// =====================
+// ENEMIES
+// =====================
+function moveEnemies(){
+  enemies.forEach(e=>{
+    e.x += e.dir * e.speed;
+
+    if(e.x < 50 || e.x > 1950){
+      e.dir *= -1;
+    }
+
+    if(Math.abs(player.x-e.x)<20 && Math.abs(player.y-e.y)<20){
+      player.energy -= 0.2;
+    }
+  });
+}
+
+// =====================
+// BOSS
+// =====================
+function moveBoss(){
+  if(!boss) return;
+
+  let dx=player.x-boss.x;
+  let dy=player.y-boss.y;
+  let dist=Math.sqrt(dx*dx+dy*dy);
+
+  boss.x += dx/dist * (1.5 * SLOW);
+  boss.y += dy/dist * (1.5 * SLOW);
+
+  if(Math.abs(player.x-boss.x)<30 &&
+     Math.abs(player.y-boss.y)<30 &&
+     player.vy>0){
+    boss.hp--;
+    player.vy = -8 * SLOW;
+  }
+
+  if(boss.hp<=0){
+    gameState="win";
+  }
+}
+
+// =====================
+// PORTAL
+// =====================
+function checkPortal(){
+  if(
+    player.x+player.r > portal.x &&
+    player.x-player.r < portal.x+portal.w &&
+    player.y+player.r > portal.y &&
+    player.y-player.r < portal.y+portal.h
+  ){
+    level++;
+
+    if(level>5){
+      gameState="win";
+      return;
+    }
+
+    player.x=100;
+    player.y=400;
+
+    generateLevel();
+  }
+}
+
+// =====================
+// DRAW
+// =====================
+function draw(){
+  ctx.clearRect(0,0,1000,600);
+
+  if(gameState==="menu"){
+    ctx.fillStyle="white";
+    ctx.fillText("Click Start",400,250);
+    return;
+  }
+
+  if(gameState==="gameover"){
+    ctx.fillStyle="red";
+    ctx.fillText("GAME OVER",400,250);
+    return;
+  }
+
+  if(gameState==="win"){
+    ctx.fillStyle="gold";
+    ctx.fillText("YOU WIN!",400,250);
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(-cameraX,0);
+
+  ctx.fillStyle="#555";
+  platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
+
+  ctx.fillStyle="yellow";
+  ctx.fillRect(portal.x,portal.y,portal.w,portal.h);
+
+  ctx.fillStyle="red";
+  enemies.forEach(e=>{
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,15,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  if(boss){
+    ctx.fillStyle="purple";
+    ctx.beginPath();
+    ctx.arc(boss.x,boss.y,boss.r,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle="cyan";
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.fillText("Level: "+level+" HP:"+Math.floor(player.energy),20,20);
+}
+
+// =====================
+// LOOP
+// =====================
+function loop(){
+  movePlayer();
+  moveEnemies();
+  moveBoss();
+  checkPortal();
+
+  cameraX += (player.x-400-cameraX) * (0.1 * SLOW);
+
+  draw();
+
+  if(player.energy<=0){
+    gameState="gameover";
+    return;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// =====================
+// START
+// =====================
+function startGame(){
+  gameState="playing";
+  level=1;
+  player.energy=100;
+  generateLevel();
+  loop();
+}
+
 </script>
+
 </body>
 </html>
+```
