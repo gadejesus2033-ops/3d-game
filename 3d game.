@@ -1,52 +1,96 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Mini Minecraft</title>
+  <title>Mini Minecraft Character</title>
   <style>
     body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/controls/PointerLockControls.js"></script>
+
 <script>
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Light
+// LIGHT
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5,10,5);
 scene.add(light);
 
-// Block (cube)
+// GROUND BLOCKS
 const geometry = new THREE.BoxGeometry();
 const material = new THREE.MeshStandardMaterial({ color: 0x55aa55 });
 
-// Create a flat world
-for (let x = -10; x < 10; x++) {
-  for (let z = -10; z < 10; z++) {
+for (let x = -20; x < 20; x++) {
+  for (let z = -20; z < 20; z++) {
     const cube = new THREE.Mesh(geometry, material);
     cube.position.set(x, 0, z);
     scene.add(cube);
   }
 }
 
-camera.position.set(0, 5, 10);
+// PLAYER (camera holder)
+const controls = new THREE.PointerLockControls(camera, document.body);
 
-// Movement controls
-document.addEventListener('keydown', (e) => {
-  const speed = 0.5;
-  if (e.key === 'w') camera.position.z -= speed;
-  if (e.key === 's') camera.position.z += speed;
-  if (e.key === 'a') camera.position.x -= speed;
-  if (e.key === 'd') camera.position.x += speed;
+document.body.addEventListener('click', () => {
+  controls.lock();
 });
+
+scene.add(controls.getObject());
+
+camera.position.y = 2;
+
+// MOVEMENT
+let moveForward = false;
+let moveBackward = false;
+let moveLeft = false;
+let moveRight = false;
+
+document.addEventListener('keydown', (e) => {
+  switch (e.key) {
+    case 'w': moveForward = true; break;
+    case 's': moveBackward = true; break;
+    case 'a': moveLeft = true; break;
+    case 'd': moveRight = true; break;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  switch (e.key) {
+    case 'w': moveForward = false; break;
+    case 's': moveBackward = false; break;
+    case 'a': moveLeft = false; break;
+    case 'd': moveRight = false; break;
+  }
+});
+
+// SIMPLE PHYSICS
+const velocity = new THREE.Vector3();
+const speed = 0.1;
 
 function animate() {
   requestAnimationFrame(animate);
+
+  velocity.x = 0;
+  velocity.z = 0;
+
+  if (moveForward) velocity.z -= speed;
+  if (moveBackward) velocity.z += speed;
+  if (moveLeft) velocity.x -= speed;
+  if (moveRight) velocity.x += speed;
+
+  controls.moveRight(velocity.x);
+  controls.moveForward(velocity.z);
+
   renderer.render(scene, camera);
 }
 
