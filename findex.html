@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Collision Fixed)</title>
+<title>Minecraft Clone (Full Movement + Collision)</title>
 <style>
 body { margin:0; overflow:hidden; font-family:sans-serif; }
 #overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
@@ -105,16 +105,19 @@ window.addEventListener('keydown',e=>{
 let velocity=new THREE.Vector3();
 let dir=new THREE.Vector3();
 let moveF,moveB,moveL,moveR;
-let gravity=0.03;
-let playerHeight = 1.8;
+let gravity=0.04;
+let jumpForce=0.25;
+let onGround=false;
+let playerHeight=1.8;
 
-camera.position.y=10;
+camera.position.set(0,10,0);
 
 window.addEventListener('keydown',e=>{
  if(e.code==='KeyW')moveF=true;
  if(e.code==='KeyS')moveB=true;
  if(e.code==='KeyA')moveL=true;
  if(e.code==='KeyD')moveR=true;
+ if(e.code==='Space' && onGround){ velocity.y = jumpForce; onGround=false; }
 });
 window.addEventListener('keyup',e=>{
  if(e.code==='KeyW')moveF=false;
@@ -141,16 +144,25 @@ window.addEventListener('mousedown',e=>{
 });
 window.addEventListener('contextmenu',e=>e.preventDefault());
 
-// FIXED COLLISION (no falling through)
-function getGroundHeight(x,z){
- let highest = -Infinity;
+// helpers
+function blockAt(x,y,z){
+ return blocks[key(Math.round(x),Math.round(y),Math.round(z))];
+}
+
+function getGround(x,z){
+ let max=-Infinity;
  for(const k in blocks){
-  const [bx,by,bz] = k.split(',').map(Number);
-  if(Math.round(bx)===Math.round(x) && Math.round(bz)===Math.round(z)){
-    if(by > highest) highest = by;
+  const [bx,by,bz]=k.split(',').map(Number);
+  if(Math.round(bx)===Math.round(x)&&Math.round(bz)===Math.round(z)){
+   if(by>max) max=by;
   }
  }
- return highest;
+ return max;
+}
+
+function canMove(x,y,z){
+ // head + body check
+ return !blockAt(x,y-1,z) && !blockAt(x,y,z);
 }
 
 function animate(){
@@ -164,18 +176,31 @@ function animate(){
  if(moveF||moveB) velocity.z-=dir.z*0.1;
  if(moveL||moveR) velocity.x-=dir.x*0.1;
 
- controls.moveRight(-velocity.x);
- controls.moveForward(-velocity.z);
+ // try move X
+ let nextX = camera.position.x - velocity.x;
+ if(canMove(nextX,camera.position.y,camera.position.z)){
+  camera.position.x = nextX;
+ }
 
- camera.position.y+=velocity.y;
+ // try move Z
+ let nextZ = camera.position.z - velocity.z;
+ if(canMove(camera.position.x,camera.position.y,nextZ)){
+  camera.position.z = nextZ;
+ }
 
- // STRONG ground collision
- const ground = getGroundHeight(camera.position.x, camera.position.z);
- const targetY = ground + playerHeight;
+ // gravity
+ camera.position.y += velocity.y;
 
- if(camera.position.y < targetY){
-  camera.position.y = targetY;
+ // ground collision
+ const ground = getGround(camera.position.x, camera.position.z);
+ const floor = ground + playerHeight;
+
+ if(camera.position.y <= floor){
+  camera.position.y = floor;
   velocity.y = 0;
+  onGround = true;
+ } else {
+  onGround = false;
  }
 
  generate(Math.floor(camera.position.x),Math.floor(camera.position.z));
