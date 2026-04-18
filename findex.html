@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Terrain + Inventory)</title>
+<title>Minecraft Clone (Collision Fixed)</title>
 <style>
 body { margin:0; overflow:hidden; font-family:sans-serif; }
 #overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
@@ -35,7 +35,6 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(50,100,50);
 scene.add(light);
 
-// textures
 const loader = new THREE.TextureLoader();
 const tex = loader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
 
@@ -57,7 +56,6 @@ function createBlock(x,y,z,type){
  blocks[key(x,y,z)]=cube;
 }
 
-// simple noise
 function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
 
 function generate(cx,cz){
@@ -70,17 +68,12 @@ function generate(cx,cz){
      createBlock(x,y,z,type);
     }
    }
-   // trees
-   if(Math.random()<0.01){
-    for(let t=1;t<4;t++) createBlock(x,h+t,z,'dirt');
-   }
   }
  }
 }
 
 generate(0,0);
 
-// controls
 const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
@@ -93,7 +86,6 @@ controls.addEventListener('unlock',()=>overlay.style.display='flex');
 const inventory=['grass','dirt','stone'];
 let selected=0;
 const hotbar=document.getElementById('hotbar');
-
 function renderHotbar(){
  hotbar.innerHTML='';
  inventory.forEach((item,i)=>{
@@ -114,6 +106,7 @@ let velocity=new THREE.Vector3();
 let dir=new THREE.Vector3();
 let moveF,moveB,moveL,moveR;
 let gravity=0.03;
+let playerHeight = 1.8;
 
 camera.position.y=10;
 
@@ -148,10 +141,21 @@ window.addEventListener('mousedown',e=>{
 });
 window.addEventListener('contextmenu',e=>e.preventDefault());
 
-function collide(x,y,z){ return blocks[key(Math.round(x),Math.floor(y-1),Math.round(z))]; }
+// FIXED COLLISION (no falling through)
+function getGroundHeight(x,z){
+ let highest = -Infinity;
+ for(const k in blocks){
+  const [bx,by,bz] = k.split(',').map(Number);
+  if(Math.round(bx)===Math.round(x) && Math.round(bz)===Math.round(z)){
+    if(by > highest) highest = by;
+  }
+ }
+ return highest;
+}
 
 function animate(){
  requestAnimationFrame(animate);
+
  dir.z=Number(moveF)-Number(moveB);
  dir.x=Number(moveR)-Number(moveL);
  dir.normalize();
@@ -162,10 +166,16 @@ function animate(){
 
  controls.moveRight(-velocity.x);
  controls.moveForward(-velocity.z);
+
  camera.position.y+=velocity.y;
 
- if(collide(camera.position.x,camera.position.y,camera.position.z)){
-  velocity.y=0;
+ // STRONG ground collision
+ const ground = getGroundHeight(camera.position.x, camera.position.z);
+ const targetY = ground + playerHeight;
+
+ if(camera.position.y < targetY){
+  camera.position.y = targetY;
+  velocity.y = 0;
  }
 
  generate(Math.floor(camera.position.x),Math.floor(camera.position.z));
