@@ -2,106 +2,204 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Mini Minecraft Clone</title>
+  <title>Mini Minecraft Clone Advanced</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
     canvas { display: block; }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      flex-direction: column;
+      z-index: 10;
+    }
+
+    button {
+      padding: 15px 25px;
+      font-size: 18px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
+
+<div id="overlay">
+  <h1>Click to Play</h1>
+  <button id="startBtn">Start Game</button>
+  <p style="margin-top:10px;font-size:14px;opacity:0.8;">(Must be served via localhost or https)</p>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 <script>
-// Scene
+// Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-// Camera
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-
-// Renderer
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Light
+// Lighting
 const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(50, 100, 50);
+light.position.set(50,100,50);
 scene.add(light);
 
-// Ground blocks
-const blockSize = 1;
-const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-const material = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+// Textures
+const loader = new THREE.TextureLoader();
+const grass = loader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+grass.wrapS = grass.wrapT = THREE.RepeatWrapping;
 
-for (let x = -10; x < 10; x++) {
-  for (let z = -10; z < 10; z++) {
-    const cube = new THREE.Mesh(geometry, material);
-    cube.position.set(x, 0, z);
-    scene.add(cube);
+const material = new THREE.MeshLambertMaterial({ map: grass });
+const geometry = new THREE.BoxGeometry(1,1,1);
+
+// World data
+const blocks = {};
+function key(x,y,z){ return `${x},${y},${z}`; }
+
+function createBlock(x,y,z){
+  const cube = new THREE.Mesh(geometry, material);
+  cube.position.set(x,y,z);
+  scene.add(cube);
+  blocks[key(x,y,z)] = cube;
+}
+
+function generateChunk(cx, cz){
+  for(let x=cx-10; x<cx+10; x++){
+    for(let z=cz-10; z<cz+10; z++){
+      if(!blocks[key(x,0,z)]){
+        createBlock(x,0,z);
+      }
+    }
   }
 }
 
-// Controls (FPS style)
+generateChunk(0,0);
+
+// Controls (FIXED)
 const controls = new THREE.PointerLockControls(camera, document.body);
-document.addEventListener('click', () => controls.lock());
 scene.add(controls.getObject());
 
-// Movement
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
 
-const velocity = new THREE.Vector3();
-const direction = new THREE.Vector3();
+startBtn.addEventListener('click', () => {
+  // Only request pointer lock after user gesture
+  controls.lock();
+});
 
-const onKeyDown = function (event) {
-  switch (event.code) {
-    case 'KeyW': moveForward = true; break;
-    case 'KeyS': moveBackward = true; break;
-    case 'KeyA': moveLeft = true; break;
-    case 'KeyD': moveRight = true; break;
+controls.addEventListener('lock', () => {
+  overlay.style.display = 'none';
+});
+
+controls.addEventListener('unlock', () => {
+  overlay.style.display = 'flex';
+});
+
+// Movement + physics
+let velocity = new THREE.Vector3();
+let direction = new THREE.Vector3();
+let onGround = false;
+
+let moveF=false, moveB=false, moveL=false, moveR=false;
+
+const gravity = 0.01;
+const jumpForce = 0.2;
+
+camera.position.y = 3;
+
+window.addEventListener('keydown', e=>{
+  if(e.code==='KeyW') moveF=true;
+  if(e.code==='KeyS') moveB=true;
+  if(e.code==='KeyA') moveL=true;
+  if(e.code==='KeyD') moveR=true;
+  if(e.code==='Space' && onGround){ velocity.y = jumpForce; onGround=false; }
+});
+
+window.addEventListener('keyup', e=>{
+  if(e.code==='KeyW') moveF=false;
+  if(e.code==='KeyS') moveB=false;
+  if(e.code==='KeyA') moveL=false;
+  if(e.code==='KeyD') moveR=false;
+});
+
+// Raycaster
+const raycaster = new THREE.Raycaster();
+
+window.addEventListener('mousedown', e=>{
+  if(!controls.isLocked) return;
+
+  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+  const intersects = raycaster.intersectObjects(Object.values(blocks));
+
+  if(intersects.length > 0){
+    const hit = intersects[0];
+    const pos = hit.object.position;
+
+    if(e.button === 0){
+      scene.remove(hit.object);
+      delete blocks[key(pos.x,pos.y,pos.z)];
+    }
+
+    if(e.button === 2){
+      const normal = hit.face.normal;
+      const nx = pos.x + normal.x;
+      const ny = pos.y + normal.y;
+      const nz = pos.z + normal.z;
+      if(!blocks[key(nx,ny,nz)]) createBlock(nx,ny,nz);
+    }
   }
-};
+});
 
-const onKeyUp = function (event) {
-  switch (event.code) {
-    case 'KeyW': moveForward = false; break;
-    case 'KeyS': moveBackward = false; break;
-    case 'KeyA': moveLeft = false; break;
-    case 'KeyD': moveRight = false; break;
-  }
-};
+window.addEventListener('contextmenu', e=>e.preventDefault());
 
-document.addEventListener('keydown', onKeyDown);
-document.addEventListener('keyup', onKeyUp);
-
-camera.position.y = 2;
-
-function animate() {
+function animate(){
   requestAnimationFrame(animate);
 
-  direction.z = Number(moveForward) - Number(moveBackward);
-  direction.x = Number(moveRight) - Number(moveLeft);
+  direction.z = Number(moveF) - Number(moveB);
+  direction.x = Number(moveR) - Number(moveL);
   direction.normalize();
 
   const speed = 0.1;
 
-  if (moveForward || moveBackward) velocity.z = -direction.z * speed;
-  if (moveLeft || moveRight) velocity.x = -direction.x * speed;
+  velocity.x -= velocity.x * 0.1;
+  velocity.z -= velocity.z * 0.1;
+  velocity.y -= gravity;
+
+  if(moveF || moveB) velocity.z -= direction.z * speed;
+  if(moveL || moveR) velocity.x -= direction.x * speed;
 
   controls.moveRight(-velocity.x);
   controls.moveForward(-velocity.z);
+
+  camera.position.y += velocity.y;
+
+  if(camera.position.y < 2){
+    velocity.y = 0;
+    camera.position.y = 2;
+    onGround = true;
+  }
+
+  const px = Math.floor(camera.position.x);
+  const pz = Math.floor(camera.position.z);
+  generateChunk(px, pz);
 
   renderer.render(scene, camera);
 }
 
 animate();
 
-// Resize
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
