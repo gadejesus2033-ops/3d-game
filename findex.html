@@ -1,207 +1,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Mini Minecraft Clone Advanced</title>
-  <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    canvas { display: block; }
-
-    #overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      flex-direction: column;
-      z-index: 10;
-    }
-
-    button {
-      padding: 15px 25px;
-      font-size: 18px;
-      cursor: pointer;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>Minecraft Clone (Terrain + Inventory)</title>
+<style>
+body { margin:0; overflow:hidden; font-family:sans-serif; }
+#overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
+#hotbar { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:10px; }
+.slot { width:40px; height:40px; border:2px solid white; display:flex; align-items:center; justify-content:center; }
+.active { border:2px solid yellow; }
+</style>
 </head>
 <body>
 
 <div id="overlay">
-  <h1>Click to Play</h1>
-  <button id="startBtn">Start Game</button>
-  <p style="margin-top:10px;font-size:14px;opacity:0.8;">(Must be served via localhost or https)</p>
+<h1>Click to Play</h1>
+<button id="startBtn">Start</button>
 </div>
+
+<div id="hotbar"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 <script>
-// Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Lighting
-const light = new THREE.DirectionalLight(0xffffff, 1);
+const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(50,100,50);
 scene.add(light);
 
-// Textures
+// textures
 const loader = new THREE.TextureLoader();
-const grass = loader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
-grass.wrapS = grass.wrapT = THREE.RepeatWrapping;
+const tex = loader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
 
-const material = new THREE.MeshLambertMaterial({ map: grass });
+const materials = {
+ grass: new THREE.MeshLambertMaterial({map:tex}),
+ dirt: new THREE.MeshLambertMaterial({map:tex}),
+ stone: new THREE.MeshLambertMaterial({color:0x888888})
+};
+
 const geometry = new THREE.BoxGeometry(1,1,1);
-
-// World data
 const blocks = {};
-function key(x,y,z){ return `${x},${y},${z}`; }
+function key(x,y,z){return `${x},${y},${z}`;}
 
-function createBlock(x,y,z){
-  const cube = new THREE.Mesh(geometry, material);
-  cube.position.set(x,y,z);
-  scene.add(cube);
-  blocks[key(x,y,z)] = cube;
+function createBlock(x,y,z,type){
+ const cube=new THREE.Mesh(geometry, materials[type]);
+ cube.position.set(x,y,z);
+ cube.userData.type=type;
+ scene.add(cube);
+ blocks[key(x,y,z)]=cube;
 }
 
-function generateChunk(cx, cz){
-  for(let x=cx-10; x<cx+10; x++){
-    for(let z=cz-10; z<cz+10; z++){
-      if(!blocks[key(x,0,z)]){
-        createBlock(x,0,z);
-      }
+// simple noise
+function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
+
+function generate(cx,cz){
+ for(let x=cx-20;x<cx+20;x++){
+  for(let z=cz-20;z<cz+20;z++){
+   const h=Math.floor(noise(x,z)*5);
+   for(let y=-5;y<=h;y++){
+    if(!blocks[key(x,y,z)]){
+     let type = y===h ? 'grass' : (y>h-3?'dirt':'stone');
+     createBlock(x,y,z,type);
     }
+   }
+   // trees
+   if(Math.random()<0.01){
+    for(let t=1;t<4;t++) createBlock(x,h+t,z,'dirt');
+   }
   }
+ }
 }
 
-generateChunk(0,0);
+generate(0,0);
 
-// Controls (FIXED)
-const controls = new THREE.PointerLockControls(camera, document.body);
+// controls
+const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-const overlay = document.getElementById('overlay');
-const startBtn = document.getElementById('startBtn');
+const overlay=document.getElementById('overlay');
+document.getElementById('startBtn').onclick=()=>controls.lock();
+controls.addEventListener('lock',()=>overlay.style.display='none');
+controls.addEventListener('unlock',()=>overlay.style.display='flex');
 
-startBtn.addEventListener('click', () => {
-  // Only request pointer lock after user gesture
-  controls.lock();
+// inventory
+const inventory=['grass','dirt','stone'];
+let selected=0;
+const hotbar=document.getElementById('hotbar');
+
+function renderHotbar(){
+ hotbar.innerHTML='';
+ inventory.forEach((item,i)=>{
+  const div=document.createElement('div');
+  div.className='slot'+(i===selected?' active':'');
+  div.innerText=item[0];
+  hotbar.appendChild(div);
+ });
+}
+renderHotbar();
+
+window.addEventListener('keydown',e=>{
+ if(e.key>='1'&&e.key<='3'){ selected=Number(e.key)-1; renderHotbar(); }
 });
 
-controls.addEventListener('lock', () => {
-  overlay.style.display = 'none';
+// movement
+let velocity=new THREE.Vector3();
+let dir=new THREE.Vector3();
+let moveF,moveB,moveL,moveR;
+let gravity=0.03;
+
+camera.position.y=10;
+
+window.addEventListener('keydown',e=>{
+ if(e.code==='KeyW')moveF=true;
+ if(e.code==='KeyS')moveB=true;
+ if(e.code==='KeyA')moveL=true;
+ if(e.code==='KeyD')moveR=true;
+});
+window.addEventListener('keyup',e=>{
+ if(e.code==='KeyW')moveF=false;
+ if(e.code==='KeyS')moveB=false;
+ if(e.code==='KeyA')moveL=false;
+ if(e.code==='KeyD')moveR=false;
 });
 
-controls.addEventListener('unlock', () => {
-  overlay.style.display = 'flex';
-});
-
-// Movement + physics
-let velocity = new THREE.Vector3();
-let direction = new THREE.Vector3();
-let onGround = false;
-
-let moveF=false, moveB=false, moveL=false, moveR=false;
-
-const gravity = 0.01;
-const jumpForce = 0.2;
-
-camera.position.y = 3;
-
-window.addEventListener('keydown', e=>{
-  if(e.code==='KeyW') moveF=true;
-  if(e.code==='KeyS') moveB=true;
-  if(e.code==='KeyA') moveL=true;
-  if(e.code==='KeyD') moveR=true;
-  if(e.code==='Space' && onGround){ velocity.y = jumpForce; onGround=false; }
-});
-
-window.addEventListener('keyup', e=>{
-  if(e.code==='KeyW') moveF=false;
-  if(e.code==='KeyS') moveB=false;
-  if(e.code==='KeyA') moveL=false;
-  if(e.code==='KeyD') moveR=false;
-});
-
-// Raycaster
-const raycaster = new THREE.Raycaster();
-
-window.addEventListener('mousedown', e=>{
-  if(!controls.isLocked) return;
-
-  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-  const intersects = raycaster.intersectObjects(Object.values(blocks));
-
-  if(intersects.length > 0){
-    const hit = intersects[0];
-    const pos = hit.object.position;
-
-    if(e.button === 0){
-      scene.remove(hit.object);
-      delete blocks[key(pos.x,pos.y,pos.z)];
-    }
-
-    if(e.button === 2){
-      const normal = hit.face.normal;
-      const nx = pos.x + normal.x;
-      const ny = pos.y + normal.y;
-      const nz = pos.z + normal.z;
-      if(!blocks[key(nx,ny,nz)]) createBlock(nx,ny,nz);
-    }
+// raycast
+const ray=new THREE.Raycaster();
+window.addEventListener('mousedown',e=>{
+ if(!controls.isLocked)return;
+ ray.setFromCamera(new THREE.Vector2(0,0),camera);
+ const hits=ray.intersectObjects(Object.values(blocks));
+ if(hits.length){
+  const hit=hits[0];
+  const p=hit.object.position;
+  if(e.button===0){ scene.remove(hit.object); delete blocks[key(p.x,p.y,p.z)]; }
+  if(e.button===2){
+   const n=hit.face.normal;
+   createBlock(p.x+n.x,p.y+n.y,p.z+n.z,inventory[selected]);
   }
+ }
 });
+window.addEventListener('contextmenu',e=>e.preventDefault());
 
-window.addEventListener('contextmenu', e=>e.preventDefault());
+function collide(x,y,z){ return blocks[key(Math.round(x),Math.floor(y-1),Math.round(z))]; }
 
 function animate(){
-  requestAnimationFrame(animate);
+ requestAnimationFrame(animate);
+ dir.z=Number(moveF)-Number(moveB);
+ dir.x=Number(moveR)-Number(moveL);
+ dir.normalize();
 
-  direction.z = Number(moveF) - Number(moveB);
-  direction.x = Number(moveR) - Number(moveL);
-  direction.normalize();
+ velocity.x*=0.9; velocity.z*=0.9; velocity.y-=gravity;
+ if(moveF||moveB) velocity.z-=dir.z*0.1;
+ if(moveL||moveR) velocity.x-=dir.x*0.1;
 
-  const speed = 0.1;
+ controls.moveRight(-velocity.x);
+ controls.moveForward(-velocity.z);
+ camera.position.y+=velocity.y;
 
-  velocity.x -= velocity.x * 0.1;
-  velocity.z -= velocity.z * 0.1;
-  velocity.y -= gravity;
+ if(collide(camera.position.x,camera.position.y,camera.position.z)){
+  velocity.y=0;
+ }
 
-  if(moveF || moveB) velocity.z -= direction.z * speed;
-  if(moveL || moveR) velocity.x -= direction.x * speed;
-
-  controls.moveRight(-velocity.x);
-  controls.moveForward(-velocity.z);
-
-  camera.position.y += velocity.y;
-
-  if(camera.position.y < 2){
-    velocity.y = 0;
-    camera.position.y = 2;
-    onGround = true;
-  }
-
-  const px = Math.floor(camera.position.x);
-  const pz = Math.floor(camera.position.z);
-  generateChunk(px, pz);
-
-  renderer.render(scene, camera);
+ generate(Math.floor(camera.position.x),Math.floor(camera.position.z));
+ renderer.render(scene,camera);
 }
-
 animate();
 
-window.addEventListener('resize', ()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+window.addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 </body>
