@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>3D Ball Minecraft</title>
+<title>3D Ball Minecraft (Fixed)</title>
 <style>
 body { margin:0; overflow:hidden; }
 #crosshair {
@@ -17,7 +17,6 @@ body { margin:0; overflow:hidden; }
 <div id="crosshair"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 const scene = new THREE.Scene();
@@ -25,6 +24,7 @@ scene.background = new THREE.Color(0x87ceeb);
 
 // CAMERA
 const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+camera.position.set(0,5,10);
 
 // RENDERER
 const renderer = new THREE.WebGLRenderer();
@@ -36,22 +36,16 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(10,20,10);
 scene.add(light);
 
-// CONTROLS (mouse look)
-const controls = new THREE.PointerLockControls(camera, document.body);
-document.body.addEventListener("click",()=>controls.lock());
-scene.add(controls.getObject());
-
 // WORLD
 const blocks=[];
 const geo = new THREE.BoxGeometry();
 const mat = new THREE.MeshStandardMaterial({color:0x55aa55});
 
-// SIMPLE TERRAIN
+// terrain
 for(let x=-20;x<20;x++){
   for(let z=-20;z<20;z++){
-    let height = Math.floor(Math.random()*3); // terrain
-
-    for(let y=0;y<=height;y++){
+    let h = Math.floor(Math.random()*3);
+    for(let y=0;y<=h;y++){
       const b=new THREE.Mesh(geo,mat);
       b.position.set(x,y,z);
       scene.add(b);
@@ -60,35 +54,38 @@ for(let x=-20;x<20;x++){
   }
 }
 
-// PLAYER BALL
+// PLAYER (ball)
 const player = new THREE.Mesh(
   new THREE.SphereGeometry(0.5,32,32),
   new THREE.MeshStandardMaterial({color:"cyan"})
 );
 scene.add(player);
 
-let velocity = new THREE.Vector3();
+let pos = {x:0,y:5,z:5};
+let vel = {x:0,y:0,z:0};
+let keys = {};
 let canJump=false;
 
-// START POSITION
-controls.getObject().position.set(0,5,5);
-
 // INPUT
-let keys={};
-
 document.addEventListener("keydown",e=>{
   keys[e.key]=true;
   if(e.key===" " && canJump){
-    velocity.y=0.25;
+    vel.y=0.25;
     canJump=false;
   }
 });
+document.addEventListener("keyup",e=>keys[e.key]=false);
 
-document.addEventListener("keyup",e=>{
-  keys[e.key]=false;
+// MOUSE LOOK
+let yaw=0, pitch=0;
+
+document.addEventListener("mousemove",e=>{
+  yaw -= e.movementX*0.002;
+  pitch -= e.movementY*0.002;
+  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
 });
 
-// RAYCAST (block interaction)
+// BLOCK INTERACTION
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(0,0);
 
@@ -99,13 +96,11 @@ document.addEventListener("mousedown",(e)=>{
   if(hits.length>0){
     const hit = hits[0];
 
-    // BREAK
     if(e.button===0){
       scene.remove(hit.object);
       blocks.splice(blocks.indexOf(hit.object),1);
     }
 
-    // PLACE
     if(e.button===2){
       const newBlock = new THREE.Mesh(geo,mat);
       newBlock.position.copy(hit.object.position).add(hit.face.normal);
@@ -121,28 +116,60 @@ document.addEventListener("contextmenu",e=>e.preventDefault());
 function animate(){
   requestAnimationFrame(animate);
 
-  velocity.y -= 0.01;
+  // movement
+  if(keys["w"]) vel.z -= 0.02;
+  if(keys["s"]) vel.z += 0.02;
+  if(keys["a"]) vel.x -= 0.02;
+  if(keys["d"]) vel.x += 0.02;
 
-  if(keys["w"]) controls.moveForward(0.1);
-  if(keys["s"]) controls.moveForward(-0.1);
-  if(keys["a"]) controls.moveRight(-0.1);
-  if(keys["d"]) controls.moveRight(0.1);
+  vel.x *= 0.9;
+  vel.z *= 0.9;
 
-  controls.getObject().position.y += velocity.y;
+  vel.y -= 0.01;
 
-  if(controls.getObject().position.y < 2){
-    velocity.y = 0;
-    controls.getObject().position.y = 2;
-    canJump = true;
+  pos.x += vel.x;
+  pos.y += vel.y;
+  pos.z += vel.z;
+
+  if(pos.y < 2){
+    pos.y = 2;
+    vel.y = 0;
+    canJump=true;
   }
 
-  // BALL follows player
-  player.position.copy(controls.getObject().position);
-  player.position.y -= 1;
+  // camera rotation
+  camera.rotation.set(pitch,yaw,0);
+
+  // move forward relative to camera
+  let forward = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
+  let right = new THREE.Vector3(1,0,0).applyEuler(camera.rotation);
+
+  if(keys["w"]) {
+    pos.x += forward.x * 0.1;
+    pos.z += forward.z * 0.1;
+  }
+  if(keys["s"]) {
+    pos.x -= forward.x * 0.1;
+    pos.z -= forward.z * 0.1;
+  }
+  if(keys["a"]) {
+    pos.x -= right.x * 0.1;
+    pos.z -= right.z * 0.1;
+  }
+  if(keys["d"]) {
+    pos.x += right.x * 0.1;
+    pos.z += right.z * 0.1;
+  }
+
+  camera.position.set(pos.x,pos.y,pos.z);
+
+  // ball follows
+  player.position.set(pos.x,pos.y-1,pos.z);
 
   renderer.render(scene,camera);
 }
 animate();
 </script>
+
 </body>
 </html>
