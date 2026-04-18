@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Full Movement + Collision)</title>
+<title>Minecraft Clone (Final Movement System)</title>
 <style>
 body { margin:0; overflow:hidden; font-family:sans-serif; }
 #overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
@@ -51,7 +51,6 @@ function key(x,y,z){return `${x},${y},${z}`;}
 function createBlock(x,y,z,type){
  const cube=new THREE.Mesh(geometry, materials[type]);
  cube.position.set(x,y,z);
- cube.userData.type=type;
  scene.add(cube);
  blocks[key(x,y,z)]=cube;
 }
@@ -108,7 +107,9 @@ let moveF,moveB,moveL,moveR;
 let gravity=0.04;
 let jumpForce=0.25;
 let onGround=false;
-let playerHeight=1.8;
+
+const playerHeight=1.8;
+const stepHeight=1.0;
 
 camera.position.set(0,10,0);
 
@@ -144,9 +145,32 @@ window.addEventListener('mousedown',e=>{
 });
 window.addEventListener('contextmenu',e=>e.preventDefault());
 
-// helpers
 function blockAt(x,y,z){
  return blocks[key(Math.round(x),Math.round(y),Math.round(z))];
+}
+
+function isFree(x,y,z){
+ return !blockAt(x,y,z) && !blockAt(x,y-1,z);
+}
+
+function tryMove(dx,dz){
+ let nx = camera.position.x + dx;
+ let nz = camera.position.z + dz;
+ let y = camera.position.y;
+
+ // normal move
+ if(isFree(nx,y,nz)){
+  camera.position.x = nx;
+  camera.position.z = nz;
+  return;
+ }
+
+ // step-up attempt
+ if(isFree(nx,y+stepHeight,nz)){
+  camera.position.x = nx;
+  camera.position.z = nz;
+  camera.position.y += stepHeight;
+ }
 }
 
 function getGround(x,z){
@@ -160,11 +184,6 @@ function getGround(x,z){
  return max;
 }
 
-function canMove(x,y,z){
- // head + body check
- return !blockAt(x,y-1,z) && !blockAt(x,y,z);
-}
-
 function animate(){
  requestAnimationFrame(animate);
 
@@ -176,22 +195,17 @@ function animate(){
  if(moveF||moveB) velocity.z-=dir.z*0.1;
  if(moveL||moveR) velocity.x-=dir.x*0.1;
 
- // try move X
- let nextX = camera.position.x - velocity.x;
- if(canMove(nextX,camera.position.y,camera.position.z)){
-  camera.position.x = nextX;
+ tryMove(-velocity.x,0);
+ tryMove(0,-velocity.z);
+
+ camera.position.y+=velocity.y;
+
+ // ceiling collision
+ if(blockAt(camera.position.x, Math.floor(camera.position.y), camera.position.z)){
+  velocity.y = 0;
  }
 
- // try move Z
- let nextZ = camera.position.z - velocity.z;
- if(canMove(camera.position.x,camera.position.y,nextZ)){
-  camera.position.z = nextZ;
- }
-
- // gravity
- camera.position.y += velocity.y;
-
- // ground collision
+ // ground
  const ground = getGround(camera.position.x, camera.position.z);
  const floor = ground + playerHeight;
 
