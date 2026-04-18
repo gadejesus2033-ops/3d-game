@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>3D Ball Arena</title>
+<title>3D Ball Minecraft</title>
 <style>
 body { margin:0; overflow:hidden; }
 #crosshair {
@@ -23,7 +23,10 @@ body { margin:0; overflow:hidden; }
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
+// CAMERA
 const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+
+// RENDERER
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -33,105 +36,86 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(10,20,10);
 scene.add(light);
 
-// CONTROLS
+// CONTROLS (mouse look)
 const controls = new THREE.PointerLockControls(camera, document.body);
 document.body.addEventListener("click",()=>controls.lock());
 scene.add(controls.getObject());
-
-camera.position.set(0,2,5);
 
 // WORLD
 const blocks=[];
 const geo = new THREE.BoxGeometry();
 const mat = new THREE.MeshStandardMaterial({color:0x55aa55});
 
-// floor
+// SIMPLE TERRAIN
 for(let x=-20;x<20;x++){
   for(let z=-20;z<20;z++){
-    const b=new THREE.Mesh(geo,mat);
-    b.position.set(x,0,z);
-    scene.add(b);
-    blocks.push(b);
+    let height = Math.floor(Math.random()*3); // terrain
+
+    for(let y=0;y<=height;y++){
+      const b=new THREE.Mesh(geo,mat);
+      b.position.set(x,y,z);
+      scene.add(b);
+      blocks.push(b);
+    }
   }
 }
 
-// PLAYER
+// PLAYER BALL
+const player = new THREE.Mesh(
+  new THREE.SphereGeometry(0.5,32,32),
+  new THREE.MeshStandardMaterial({color:"cyan"})
+);
+scene.add(player);
+
 let velocity = new THREE.Vector3();
-let move={f:0,b:0,l:0,r:0};
 let canJump=false;
 
-// KEYS
+// START POSITION
+controls.getObject().position.set(0,5,5);
+
+// INPUT
+let keys={};
+
 document.addEventListener("keydown",e=>{
-  if(e.key==="w") move.f=1;
-  if(e.key==="s") move.b=1;
-  if(e.key==="a") move.l=1;
-  if(e.key==="d") move.r=1;
+  keys[e.key]=true;
   if(e.key===" " && canJump){
-    velocity.y=0.2;
+    velocity.y=0.25;
     canJump=false;
   }
 });
 
 document.addEventListener("keyup",e=>{
-  if(e.key==="w") move.f=0;
-  if(e.key==="s") move.b=0;
-  if(e.key==="a") move.l=0;
-  if(e.key==="d") move.r=0;
+  keys[e.key]=false;
 });
 
-// ENEMIES
-const enemies=[];
-function spawnEnemy(x,z){
-  const e=new THREE.Mesh(
-    new THREE.SphereGeometry(0.5),
-    new THREE.MeshStandardMaterial({color:"red"})
-  );
-  e.position.set(x,1,z);
-  scene.add(e);
-  enemies.push(e);
-}
-spawnEnemy(5,5);
-spawnEnemy(-5,5);
+// RAYCAST (block interaction)
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(0,0);
 
-// BOSS
-let boss=new THREE.Mesh(
-  new THREE.SphereGeometry(1),
-  new THREE.MeshStandardMaterial({color:"purple"})
-);
-boss.position.set(10,1,0);
-boss.hp=10;
-scene.add(boss);
-
-// PORTAL
-const portal=new THREE.Mesh(
-  new THREE.BoxGeometry(1,2,1),
-  new THREE.MeshStandardMaterial({color:"yellow"})
-);
-portal.position.set(15,1,0);
-scene.add(portal);
-
-// RAYCAST (attack)
-const raycaster=new THREE.Raycaster();
-const mouse=new THREE.Vector2(0,0);
-
-document.addEventListener("mousedown",()=>{
+document.addEventListener("mousedown",(e)=>{
   raycaster.setFromCamera(mouse,camera);
-  let hit = raycaster.intersectObjects(enemies.concat([boss]));
+  const hits = raycaster.intersectObjects(blocks);
 
-  if(hit.length>0){
-    let obj=hit[0].object;
+  if(hits.length>0){
+    const hit = hits[0];
 
-    if(obj===boss){
-      boss.hp--;
-      if(boss.hp<=0){
-        scene.remove(boss);
-      }
-    } else {
-      scene.remove(obj);
-      enemies.splice(enemies.indexOf(obj),1);
+    // BREAK
+    if(e.button===0){
+      scene.remove(hit.object);
+      blocks.splice(blocks.indexOf(hit.object),1);
+    }
+
+    // PLACE
+    if(e.button===2){
+      const newBlock = new THREE.Mesh(geo,mat);
+      newBlock.position.copy(hit.object.position).add(hit.face.normal);
+      scene.add(newBlock);
+      blocks.push(newBlock);
     }
   }
 });
+
+document.addEventListener("contextmenu",e=>e.preventDefault());
 
 // LOOP
 function animate(){
@@ -139,43 +123,22 @@ function animate(){
 
   velocity.y -= 0.01;
 
-  if(move.f) controls.moveForward(0.1);
-  if(move.b) controls.moveForward(-0.1);
-  if(move.l) controls.moveRight(-0.1);
-  if(move.r) controls.moveRight(0.1);
+  if(keys["w"]) controls.moveForward(0.1);
+  if(keys["s"]) controls.moveForward(-0.1);
+  if(keys["a"]) controls.moveRight(-0.1);
+  if(keys["d"]) controls.moveRight(0.1);
 
   controls.getObject().position.y += velocity.y;
 
   if(controls.getObject().position.y < 2){
-    velocity.y=0;
-    controls.getObject().position.y=2;
-    canJump=true;
+    velocity.y = 0;
+    controls.getObject().position.y = 2;
+    canJump = true;
   }
 
-  // ENEMY FOLLOW
-  enemies.forEach(e=>{
-    let dx=camera.position.x - e.position.x;
-    let dz=camera.position.z - e.position.z;
-    let d=Math.sqrt(dx*dx+dz*dz);
-    e.position.x += dx/d*0.02;
-    e.position.z += dz/d*0.02;
-  });
-
-  // BOSS FOLLOW
-  if(boss){
-    let dx=camera.position.x - boss.position.x;
-    let dz=camera.position.z - boss.position.z;
-    let d=Math.sqrt(dx*dx+dz*dz);
-    boss.position.x += dx/d*0.03;
-    boss.position.z += dz/d*0.03;
-  }
-
-  // PORTAL WIN
-  let dx=camera.position.x - portal.position.x;
-  let dz=camera.position.z - portal.position.z;
-  if(Math.sqrt(dx*dx+dz*dz)<1){
-    alert("You Win!");
-  }
+  // BALL follows player
+  player.position.copy(controls.getObject().position);
+  player.position.y -= 1;
 
   renderer.render(scene,camera);
 }
