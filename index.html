@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>3D Ball Arena</title>
+<style>
+body { margin:0; overflow:hidden; }
+#crosshair {
+  position:fixed;
+  top:50%; left:50%;
+  width:10px; height:10px;
+  margin-left:-5px; margin-top:-5px;
+  background:white;
+}
+</style>
+</head>
+<body>
+<div id="crosshair"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/controls/PointerLockControls.js"></script>
+
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// LIGHT
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
+
+// CONTROLS
+const controls = new THREE.PointerLockControls(camera, document.body);
+document.body.addEventListener("click",()=>controls.lock());
+scene.add(controls.getObject());
+
+camera.position.set(0,2,5);
+
+// WORLD
+const blocks=[];
+const geo = new THREE.BoxGeometry();
+const mat = new THREE.MeshStandardMaterial({color:0x55aa55});
+
+// floor
+for(let x=-20;x<20;x++){
+  for(let z=-20;z<20;z++){
+    const b=new THREE.Mesh(geo,mat);
+    b.position.set(x,0,z);
+    scene.add(b);
+    blocks.push(b);
+  }
+}
+
+// PLAYER
+let velocity = new THREE.Vector3();
+let move={f:0,b:0,l:0,r:0};
+let canJump=false;
+
+// KEYS
+document.addEventListener("keydown",e=>{
+  if(e.key==="w") move.f=1;
+  if(e.key==="s") move.b=1;
+  if(e.key==="a") move.l=1;
+  if(e.key==="d") move.r=1;
+  if(e.key===" " && canJump){
+    velocity.y=0.2;
+    canJump=false;
+  }
+});
+
+document.addEventListener("keyup",e=>{
+  if(e.key==="w") move.f=0;
+  if(e.key==="s") move.b=0;
+  if(e.key==="a") move.l=0;
+  if(e.key==="d") move.r=0;
+});
+
+// ENEMIES
+const enemies=[];
+function spawnEnemy(x,z){
+  const e=new THREE.Mesh(
+    new THREE.SphereGeometry(0.5),
+    new THREE.MeshStandardMaterial({color:"red"})
+  );
+  e.position.set(x,1,z);
+  scene.add(e);
+  enemies.push(e);
+}
+spawnEnemy(5,5);
+spawnEnemy(-5,5);
+
+// BOSS
+let boss=new THREE.Mesh(
+  new THREE.SphereGeometry(1),
+  new THREE.MeshStandardMaterial({color:"purple"})
+);
+boss.position.set(10,1,0);
+boss.hp=10;
+scene.add(boss);
+
+// PORTAL
+const portal=new THREE.Mesh(
+  new THREE.BoxGeometry(1,2,1),
+  new THREE.MeshStandardMaterial({color:"yellow"})
+);
+portal.position.set(15,1,0);
+scene.add(portal);
+
+// RAYCAST (attack)
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2(0,0);
+
+document.addEventListener("mousedown",()=>{
+  raycaster.setFromCamera(mouse,camera);
+  let hit = raycaster.intersectObjects(enemies.concat([boss]));
+
+  if(hit.length>0){
+    let obj=hit[0].object;
+
+    if(obj===boss){
+      boss.hp--;
+      if(boss.hp<=0){
+        scene.remove(boss);
+      }
+    } else {
+      scene.remove(obj);
+      enemies.splice(enemies.indexOf(obj),1);
+    }
+  }
+});
+
+// LOOP
+function animate(){
+  requestAnimationFrame(animate);
+
+  velocity.y -= 0.01;
+
+  if(move.f) controls.moveForward(0.1);
+  if(move.b) controls.moveForward(-0.1);
+  if(move.l) controls.moveRight(-0.1);
+  if(move.r) controls.moveRight(0.1);
+
+  controls.getObject().position.y += velocity.y;
+
+  if(controls.getObject().position.y < 2){
+    velocity.y=0;
+    controls.getObject().position.y=2;
+    canJump=true;
+  }
+
+  // ENEMY FOLLOW
+  enemies.forEach(e=>{
+    let dx=camera.position.x - e.position.x;
+    let dz=camera.position.z - e.position.z;
+    let d=Math.sqrt(dx*dx+dz*dz);
+    e.position.x += dx/d*0.02;
+    e.position.z += dz/d*0.02;
+  });
+
+  // BOSS FOLLOW
+  if(boss){
+    let dx=camera.position.x - boss.position.x;
+    let dz=camera.position.z - boss.position.z;
+    let d=Math.sqrt(dx*dx+dz*dz);
+    boss.position.x += dx/d*0.03;
+    boss.position.z += dz/d*0.03;
+  }
+
+  // PORTAL WIN
+  let dx=camera.position.x - portal.position.x;
+  let dz=camera.position.z - portal.position.z;
+  if(Math.sqrt(dx*dx+dz*dz)<1){
+    alert("You Win!");
+  }
+
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>
