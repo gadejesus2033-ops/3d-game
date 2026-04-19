@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Clone (Clean Final)</title>
+<title>Minecraft Clone (Smooth Movement FIXED)</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -64,11 +64,11 @@ function key(x,y,z){ return `${x},${y},${z}`; }
 function colKey(x,z){ return `${x},${z}`; }
 
 function hasBlock(x,y,z){
- return blocks.has(key(x,y,z));
+ return blocks.has(key(Math.round(x),Math.round(y),Math.round(z)));
 }
 
 function getGround(x,z){
- return heightMap.get(colKey(x,z)) ?? -5;
+ return heightMap.get(colKey(Math.round(x),Math.round(z))) ?? -5;
 }
 
 // ===== CHUNKS =====
@@ -112,14 +112,12 @@ function updateChunks(){
  const cx = Math.floor(camera.position.x / CHUNK_SIZE);
  const cz = Math.floor(camera.position.z / CHUNK_SIZE);
 
- // generate
  for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++){
   for(let z=-RENDER_DISTANCE;z<=RENDER_DISTANCE;z++){
    generateChunk(cx+x, cz+z);
   }
  }
 
- // unload
  for(const [k, group] of chunks){
   const [x,z] = k.split(',').map(Number);
 
@@ -163,54 +161,27 @@ controls.addEventListener('unlock',()=>{
 let velocityY = 0;
 const playerHeight = 1.8;
 
-let moveQueue = [];
-let moveCooldown = 0;
-const MOVE_DELAY = 0.12;
-
 camera.position.set(0,20,0);
 
-// ===== INPUT =====
-window.addEventListener('keydown', e => {
- if(e.repeat) return;
+// ===== INPUT (SMOOTH MOVEMENT) =====
+const keys = { w:false, a:false, s:false, d:false };
 
- const angle = camera.rotation.y;
-
- let dx = 0;
- let dz = 0;
-
- if(e.code === 'KeyW'){
-  dx = -Math.sin(angle);
-  dz = -Math.cos(angle);
- }
- if(e.code === 'KeyS'){
-  dx = Math.sin(angle);
-  dz = Math.cos(angle);
- }
- if(e.code === 'KeyA'){
-  dx = -Math.cos(angle);
-  dz = Math.sin(angle);
- }
- if(e.code === 'KeyD'){
-  dx = Math.cos(angle);
-  dz = -Math.sin(angle);
- }
-
- dx = Math.round(dx);
- dz = Math.round(dz);
-
- // fallback to prevent no-move bug
- if(dx === 0 && dz === 0){
-  if(e.code==='KeyW') dz=-1;
-  if(e.code==='KeyS') dz=1;
-  if(e.code==='KeyA') dx=-1;
-  if(e.code==='KeyD') dx=1;
- }
-
- moveQueue.push({x:dx, z:dz});
+window.addEventListener('keydown', e=>{
+ if(e.code==='KeyW') keys.w=true;
+ if(e.code==='KeyS') keys.s=true;
+ if(e.code==='KeyA') keys.a=true;
+ if(e.code==='KeyD') keys.d=true;
 
  if(e.code==='Space' && velocityY===0){
   velocityY = 0.25;
  }
+});
+
+window.addEventListener('keyup', e=>{
+ if(e.code==='KeyW') keys.w=false;
+ if(e.code==='KeyS') keys.s=false;
+ if(e.code==='KeyA') keys.a=false;
+ if(e.code==='KeyD') keys.d=false;
 });
 
 // ===== COLLISION =====
@@ -226,39 +197,44 @@ function canStand(x,z,y){
  return true;
 }
 
-function tryMove(dx,dz){
- const tx = Math.round(camera.position.x) + dx;
- const tz = Math.round(camera.position.z) + dz;
- const ground = getGround(tx,tz);
-
- const targetY = ground + playerHeight;
-
- if(targetY - camera.position.y <= 1.1){
-  if(canStand(tx,tz,targetY)){
-   camera.position.x = tx;
-   camera.position.z = tz;
-   camera.position.y = targetY;
-   return true;
-  }
- }
- return false;
-}
-
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
  updateChunks();
 
- moveCooldown -= 0.016;
+ const speed = 0.1;
+ let moveX = 0;
+ let moveZ = 0;
 
- if(moveCooldown<=0 && moveQueue.length){
-  const step = moveQueue.shift();
-  if(tryMove(step.x, step.z)){
-   moveCooldown = MOVE_DELAY;
-  }
+ const angle = camera.rotation.y;
+
+ if(keys.w){
+  moveX += -Math.sin(angle) * speed;
+  moveZ += -Math.cos(angle) * speed;
+ }
+ if(keys.s){
+  moveX += Math.sin(angle) * speed;
+  moveZ += Math.cos(angle) * speed;
+ }
+ if(keys.a){
+  moveX += -Math.cos(angle) * speed;
+  moveZ += Math.sin(angle) * speed;
+ }
+ if(keys.d){
+  moveX += Math.cos(angle) * speed;
+  moveZ += -Math.sin(angle) * speed;
  }
 
+ const newX = camera.position.x + moveX;
+ const newZ = camera.position.z + moveZ;
+
+ if(canStand(newX, newZ, camera.position.y)){
+  camera.position.x = newX;
+  camera.position.z = newZ;
+ }
+
+ // gravity
  velocityY -= 0.01;
  camera.position.y += velocityY;
 
