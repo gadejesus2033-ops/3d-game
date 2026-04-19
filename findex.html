@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Arrow Key Movement</title>
+<title>Full Movement (Arrow Keys)</title>
 <style>
 body { margin:0; overflow:hidden; }
 #overlay {
@@ -20,7 +20,7 @@ body { margin:0; overflow:hidden; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-// ===== BASIC SETUP =====
+// ===== SETUP =====
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
@@ -60,19 +60,25 @@ document.addEventListener('pointerlockchange', ()=>{
 });
 
 // ===== INPUT =====
-let forward = false;
+const keys = {
+ up:false,
+ down:false,
+ left:false,
+ right:false
+};
 
 window.onkeydown = (e)=>{
- if(e.code === 'ArrowUp'){
-  forward = true;
-  console.log("UP pressed");
- }
+ if(e.code==='ArrowUp') keys.up = true;
+ if(e.code==='ArrowDown') keys.down = true;
+ if(e.code==='ArrowLeft') keys.left = true;
+ if(e.code==='ArrowRight') keys.right = true;
 };
 
 window.onkeyup = (e)=>{
- if(e.code === 'ArrowUp'){
-  forward = false;
- }
+ if(e.code==='ArrowUp') keys.up = false;
+ if(e.code==='ArrowDown') keys.down = false;
+ if(e.code==='ArrowLeft') keys.left = false;
+ if(e.code==='ArrowRight') keys.right = false;
 };
 
 // start position
@@ -83,16 +89,51 @@ function animate(){
  requestAnimationFrame(animate);
 
  const speed = 0.1;
- const angle = camera.rotation.y;
 
- if(forward){
-  camera.position.x += -Math.sin(angle) * speed;
-  camera.position.z += -Math.cos(angle) * speed;
+ // forward direction
+ const forward = new THREE.Vector3();
+ camera.getWorldDirection(forward);
+
+ // sideways direction
+ const right = new THREE.Vector3();
+ right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+
+ let moveX = 0;
+ let moveZ = 0;
+
+ // forward/back
+ if(keys.up){
+  moveX += forward.x * speed;
+  moveZ += forward.z * speed;
  }
+ if(keys.down){
+  moveX -= forward.x * speed;
+  moveZ -= forward.z * speed;
+ }
+
+ // left/right
+ if(keys.left){
+  moveX -= right.x * speed;
+  moveZ -= right.z * speed;
+ }
+ if(keys.right){
+  moveX += right.x * speed;
+  moveZ += right.z * speed;
+ }
+
+ camera.position.x += moveX;
+ camera.position.z += moveZ;
 
  renderer.render(scene,camera);
 }
 animate();
+
+// resize
+window.addEventListener('resize',()=>{
+ camera.aspect = innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
 </script>
 
 </body>
