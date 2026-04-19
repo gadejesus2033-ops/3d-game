@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Clone (Working Movement)</title>
+<title>Minecraft Clone (Clean Final)</title>
 
 <style>
 body { margin:0; overflow:hidden; }
 
+/* overlay */
 #overlay {
  position:absolute; inset:0;
  background:rgba(0,0,0,.6);
@@ -14,6 +15,7 @@ body { margin:0; overflow:hidden; }
  flex-direction:column; color:white;
 }
 
+/* crosshair */
 #crosshair {
  position:absolute;
  top:50%; left:50%;
@@ -110,12 +112,14 @@ function updateChunks(){
  const cx = Math.floor(camera.position.x / CHUNK_SIZE);
  const cz = Math.floor(camera.position.z / CHUNK_SIZE);
 
+ // generate
  for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++){
   for(let z=-RENDER_DISTANCE;z<=RENDER_DISTANCE;z++){
    generateChunk(cx+x, cz+z);
   }
  }
 
+ // unload
  for(const [k, group] of chunks){
   const [x,z] = k.split(',').map(Number);
 
@@ -165,7 +169,7 @@ const MOVE_DELAY = 0.12;
 
 camera.position.set(0,20,0);
 
-// ===== INPUT (100% WORKING) =====
+// ===== INPUT =====
 window.addEventListener('keydown', e => {
  if(e.repeat) return;
 
@@ -194,12 +198,12 @@ window.addEventListener('keydown', e => {
  dx = Math.round(dx);
  dz = Math.round(dz);
 
- // fallback (prevents stuck movement)
+ // fallback to prevent no-move bug
  if(dx === 0 && dz === 0){
-  if(e.code === 'KeyW') dz = -1;
-  if(e.code === 'KeyS') dz = 1;
-  if(e.code === 'KeyA') dx = -1;
-  if(e.code === 'KeyD') dx = 1;
+  if(e.code==='KeyW') dz=-1;
+  if(e.code==='KeyS') dz=1;
+  if(e.code==='KeyA') dx=-1;
+  if(e.code==='KeyD') dx=1;
  }
 
  moveQueue.push({x:dx, z:dz});
@@ -270,6 +274,7 @@ function animate(){
 }
 animate();
 
+// resize
 window.addEventListener('resize',()=>{
  camera.aspect = innerWidth/innerHeight;
  camera.updateProjectionMatrix();
