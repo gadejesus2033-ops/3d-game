@@ -2,14 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Final Movement + Systems)</title>
+<title>Minecraft Clone (Playable Final)</title>
+
 <style>
 body { margin:0; overflow:hidden; }
+
+/* overlay */
 #overlay {
  position:absolute; inset:0;
  background:rgba(0,0,0,.6);
  display:flex; align-items:center; justify-content:center;
  flex-direction:column; color:white;
+}
+
+/* crosshair */
+#crosshair {
+ position:absolute;
+ top:50%; left:50%;
+ width:6px; height:6px;
+ background:white;
+ transform:translate(-50%,-50%);
+ border-radius:50%;
+ display:none;
+ pointer-events:none;
 }
 </style>
 </head>
@@ -19,6 +34,8 @@ body { margin:0; overflow:hidden; }
 <h1>Click to Play</h1>
 <button id="startBtn">Start</button>
 </div>
+
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
@@ -106,7 +123,6 @@ function updateChunks(){
   const [x,z] = k.split(',').map(Number);
 
   if(Math.abs(x-cx)>RENDER_DISTANCE || Math.abs(z-cz)>RENDER_DISTANCE){
-
    group.children.forEach(mesh=>{
     const {x,y,z} = mesh.position;
     blocks.delete(key(x,y,z));
@@ -124,16 +140,22 @@ scene.add(controls.getObject());
 
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
+const crosshair = document.getElementById('crosshair');
 
 startBtn.onclick = ()=>controls.lock();
 
-controls.addEventListener('lock',()=>overlay.style.display='none');
-controls.addEventListener('unlock',()=>overlay.style.display='flex');
+document.body.addEventListener('click', ()=>{
+ if(!controls.isLocked) controls.lock();
+});
 
-document.addEventListener('click', (e)=>{
- if(e.target.id !== "startBtn" && !controls.isLocked){
-  controls.lock();
- }
+controls.addEventListener('lock',()=>{
+ overlay.style.display='none';
+ crosshair.style.display='block';
+});
+
+controls.addEventListener('unlock',()=>{
+ overlay.style.display='flex';
+ crosshair.style.display='none';
 });
 
 // ===== PLAYER =====
@@ -144,9 +166,9 @@ let moveQueue = [];
 let moveCooldown = 0;
 const MOVE_DELAY = 0.12;
 
-camera.position.set(0,10,0);
+camera.position.set(0,20,0);
 
-// ===== INPUT (FIXED CAMERA-RELATIVE) =====
+// ===== INPUT =====
 window.addEventListener('keydown', e => {
  if(e.repeat) return;
 
@@ -165,17 +187,14 @@ window.addEventListener('keydown', e => {
   move.x = Math.round(dir.x);
   move.z = Math.round(dir.z);
  }
-
  if(e.code === 'KeyS'){
   move.x = -Math.round(dir.x);
   move.z = -Math.round(dir.z);
  }
-
  if(e.code === 'KeyA'){
   move.x = -Math.round(right.x);
   move.z = -Math.round(right.z);
  }
-
  if(e.code === 'KeyD'){
   move.x = Math.round(right.x);
   move.z = Math.round(right.z);
@@ -183,6 +202,10 @@ window.addEventListener('keydown', e => {
 
  if(move.x !== 0 || move.z !== 0){
   moveQueue.push(move);
+ }
+
+ if(e.code==='Space' && velocityY===0){
+  velocityY = 0.25;
  }
 });
 
@@ -214,7 +237,6 @@ function tryMove(dx,dz){
    return true;
   }
  }
-
  return false;
 }
 
@@ -233,7 +255,6 @@ function animate(){
   }
  }
 
- // gravity
  velocityY -= 0.01;
  camera.position.y += velocityY;
 
@@ -249,7 +270,6 @@ function animate(){
 }
 animate();
 
-// ===== RESIZE =====
 window.addEventListener('resize',()=>{
  camera.aspect = innerWidth/innerHeight;
  camera.updateProjectionMatrix();
