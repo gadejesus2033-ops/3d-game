@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Final Movement System)</title>
+<title>Minecraft Clone (Stabilized)</title>
 <style>
 body { margin:0; overflow:hidden; font-family:sans-serif; }
 #overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
@@ -23,6 +23,7 @@ body { margin:0; overflow:hidden; font-family:sans-serif; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 <script>
+// ===== CORE =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
@@ -35,6 +36,7 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(50,100,50);
 scene.add(light);
 
+// ===== BLOCKS =====
 const loader = new THREE.TextureLoader();
 const tex = loader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
 
@@ -46,46 +48,40 @@ const materials = {
 
 const geometry = new THREE.BoxGeometry(1,1,1);
 const blocks = {};
-function key(x,y,z){return `${x},${y},${z}`;}
+
+function key(x,y,z){ return `${x},${y},${z}`; }
 
 function createBlock(x,y,z,type){
- const cube=new THREE.Mesh(geometry, materials[type]);
+ if(blocks[key(x,y,z)]) return;
+ const cube = new THREE.Mesh(geometry, materials[type]);
  cube.position.set(x,y,z);
  scene.add(cube);
- blocks[key(x,y,z)]=cube;
+ blocks[key(x,y,z)] = cube;
 }
 
+// ===== TERRAIN =====
 function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
 
-function generate(cx,cz){
- for(let x=cx-80;x<cx+80;x++){
-  for(let z=cz-80;z<cz+80;z++){
-   const h=Math.floor(noise(x,z)*5);
+let generated = new Set();
+
+function generateChunk(cx,cz){
+ const chunkKey = cx+","+cz;
+ if(generated.has(chunkKey)) return;
+ generated.add(chunkKey);
+
+ for(let x=cx-20;x<cx+20;x++){
+  for(let z=cz-20;z<cz+20;z++){
+   const h = Math.floor(noise(x,z)*5);
    for(let y=-5;y<=h;y++){
-    if(!blocks[key(x,y,z)]){
-     let type = y===h ? 'grass' : (y>h-3?'dirt':'stone');
-     createBlock(x,y,z,type);
-    }
-   }
-
-   // deterministic trees (no flicker bug)
-   const treeSeed = Math.abs(Math.floor(x*928371 + z*1237)) % 50;
-   if(treeSeed === 1){
-    for(let t=1;t<4;t++){
-      if(!blocks[key(x,h+t,z)]) createBlock(x,h+t,z,'dirt');
-    }
-   }
-  }
- }
-}
+    let type = y===h ? 'grass' : (y>h-3?'dirt':'stone');
+    createBlock(x,y,z,type);
    }
   }
  }
 }
 
-generate(0,0);
-
-const controls=new THREE.PointerLockControls(camera,document.body);
+// ===== CONTROLS =====
+const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
 const overlay=document.getElementById('overlay');
@@ -93,7 +89,7 @@ document.getElementById('startBtn').onclick=()=>controls.lock();
 controls.addEventListener('lock',()=>overlay.style.display='none');
 controls.addEventListener('unlock',()=>overlay.style.display='flex');
 
-// inventory
+// ===== INVENTORY =====
 const inventory=['grass','dirt','stone'];
 let selected=0;
 const hotbar=document.getElementById('hotbar');
@@ -112,7 +108,7 @@ window.addEventListener('keydown',e=>{
  if(e.key>='1'&&e.key<='3'){ selected=Number(e.key)-1; renderHotbar(); }
 });
 
-// movement
+// ===== MOVEMENT =====
 let velocity=new THREE.Vector3();
 let dir=new THREE.Vector3();
 let moveF,moveB,moveL,moveR;
@@ -121,7 +117,7 @@ let jumpForce=0.25;
 let onGround=false;
 
 const playerHeight=1.8;
-const stepHeight=1.0;
+const stepHeight=1;
 
 camera.position.set(0,10,0);
 
@@ -130,7 +126,7 @@ window.addEventListener('keydown',e=>{
  if(e.code==='KeyS')moveB=true;
  if(e.code==='KeyA')moveL=true;
  if(e.code==='KeyD')moveR=true;
- if(e.code==='Space' && onGround){ velocity.y = jumpForce; onGround=false; }
+ if(e.code==='Space' && onGround){ velocity.y=jumpForce; }
 });
 window.addEventListener('keyup',e=>{
  if(e.code==='KeyW')moveF=false;
@@ -139,7 +135,42 @@ window.addEventListener('keyup',e=>{
  if(e.code==='KeyD')moveR=false;
 });
 
-// raycast
+function blockAt(x,y,z){ return blocks[key(Math.round(x),Math.round(y),Math.round(z))]; }
+
+function canMove(x,y,z){
+ return !blockAt(x,y,z) && !blockAt(x,y-1,z);
+}
+
+function tryMove(dx,dz){
+ let nx = camera.position.x + dx;
+ let nz = camera.position.z + dz;
+ let y = camera.position.y;
+
+ if(canMove(nx,y,nz)){
+  camera.position.x=nx;
+  camera.position.z=nz;
+  return;
+ }
+
+ if(canMove(nx,y+stepHeight,nz)){
+  camera.position.x=nx;
+  camera.position.z=nz;
+  camera.position.y+=stepHeight;
+ }
+}
+
+function getGround(x,z){
+ let max=-Infinity;
+ for(const k in blocks){
+  const [bx,by,bz]=k.split(',').map(Number);
+  if(Math.round(bx)===Math.round(x)&&Math.round(bz)===Math.round(z)){
+   if(by>max) max=by;
+  }
+ }
+ return max===-Infinity ? -5 : max;
+}
+
+// ===== INTERACTION =====
 const ray=new THREE.Raycaster();
 window.addEventListener('mousedown',e=>{
  if(!controls.isLocked)return;
@@ -157,99 +188,38 @@ window.addEventListener('mousedown',e=>{
 });
 window.addEventListener('contextmenu',e=>e.preventDefault());
 
-function blockAt(x,y,z){
- return blocks[key(Math.round(x),Math.round(y),Math.round(z))];
-}
-
-function isFree(x,y,z){
- return !blockAt(x,y,z) && !blockAt(x,y-1,z);
-}
-
-function tryMove(dx,dz){
- let nx = camera.position.x + dx;
- let nz = camera.position.z + dz;
- let y = camera.position.y;
-
- // normal move
- if(isFree(nx,y,nz)){
-  camera.position.x = nx;
-  camera.position.z = nz;
-  return;
- }
-
- // step-up attempt
- if(isFree(nx,y+stepHeight,nz)){
-  camera.position.x = nx;
-  camera.position.z = nz;
-  camera.position.y += stepHeight;
- }
-}
-
-function getGround(x,z){
- let max = -Infinity;
- for(const k in blocks){
-  const [bx,by,bz]=k.split(',').map(Number);
-  if(Math.round(bx)===Math.round(x)&&Math.round(bz)===Math.round(z)){
-   if(by>max) max=by;
-  }
- }
- // FIX: prevent falling into void
- if(max === -Infinity) return -5; 
- return max;
-}
-
+// ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- // ALWAYS generate terrain FIRST (prevents void rendering)
- generate(Math.floor(camera.position.x), Math.floor(camera.position.z));
- requestAnimationFrame(animate);
+ // generate only nearby chunks
+ const cx=Math.floor(camera.position.x/20)*20;
+ const cz=Math.floor(camera.position.z/20)*20;
+ generateChunk(cx,cz);
 
  dir.z=Number(moveF)-Number(moveB);
  dir.x=Number(moveR)-Number(moveL);
  dir.normalize();
 
- // slower movement tuning
-const walkSpeed = 0.05;
-velocity.x*=0.8; velocity.z*=0.8; velocity.y-=gravity;
- if(moveF||moveB) velocity.z-=dir.z*walkSpeed;
- if(moveL||moveR) velocity.x-=dir.x*walkSpeed;
+ const speed=0.05;
+ velocity.x*=0.8; velocity.z*=0.8; velocity.y-=gravity;
+ if(moveF||moveB) velocity.z-=dir.z*speed;
+ if(moveL||moveR) velocity.x-=dir.x*speed;
 
  tryMove(-velocity.x,0);
  tryMove(0,-velocity.z);
 
  camera.position.y+=velocity.y;
 
- // prevent NaN / runaway values
- if(!isFinite(camera.position.x) || !isFinite(camera.position.y) || !isFinite(camera.position.z)){
-  camera.position.set(0,20,0);
-  velocity.set(0,0,0);
- }
+ const ground=getGround(camera.position.x,camera.position.z);
+ const floor=ground+playerHeight;
 
- // safety clamp (prevents disappearing world bug)
- if(camera.position.y < -50){
-  camera.position.y = 20;
-  velocity.y = 0;
- }
+ if(camera.position.y<=floor){
+  camera.position.y=floor;
+  velocity.y=0;
+  onGround=true;
+ } else onGround=false;
 
- // ceiling collision
- if(blockAt(camera.position.x, Math.floor(camera.position.y), camera.position.z)){
-  velocity.y = 0;
- }
-
- // ground
- const ground = getGround(camera.position.x, camera.position.z);
- const floor = ground + playerHeight;
-
- if(camera.position.y <= floor){
-  camera.position.y = floor;
-  velocity.y = 0;
-  onGround = true;
- } else {
-  onGround = false;
- }
-
- // already generated at top of frame
  renderer.render(scene,camera);
 }
 animate();
