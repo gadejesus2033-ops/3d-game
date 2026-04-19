@@ -58,14 +58,26 @@ function createBlock(x,y,z,type){
 function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
 
 function generate(cx,cz){
- for(let x=cx-20;x<cx+20;x++){
-  for(let z=cz-20;z<cz+20;z++){
+ for(let x=cx-40;x<cx+40;x++){
+  for(let z=cz-40;z<cz+40;z++){
    const h=Math.floor(noise(x,z)*5);
    for(let y=-5;y<=h;y++){
     if(!blocks[key(x,y,z)]){
      let type = y===h ? 'grass' : (y>h-3?'dirt':'stone');
      createBlock(x,y,z,type);
     }
+   }
+
+   // deterministic trees (no flicker bug)
+   const treeSeed = Math.abs(Math.floor(x*928371 + z*1237)) % 50;
+   if(treeSeed === 1){
+    for(let t=1;t<4;t++){
+      if(!blocks[key(x,h+t,z)]) createBlock(x,h+t,z,'dirt');
+    }
+   }
+  }
+ }
+}
    }
   }
  }
