@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>W Forward Only</title>
+<title>Arrow Key Movement</title>
 <style>
 body { margin:0; overflow:hidden; }
 #overlay {
@@ -63,14 +63,14 @@ document.addEventListener('pointerlockchange', ()=>{
 let forward = false;
 
 window.onkeydown = (e)=>{
- if(e.code === 'KeyW'){
+ if(e.code === 'ArrowUp'){
   forward = true;
-  console.log("W pressed");
+  console.log("UP pressed");
  }
 };
 
 window.onkeyup = (e)=>{
- if(e.code === 'KeyW'){
+ if(e.code === 'ArrowUp'){
   forward = false;
  }
 };
