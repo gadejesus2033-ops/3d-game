@@ -58,8 +58,8 @@ function createBlock(x,y,z,type){
 function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
 
 function generate(cx,cz){
- for(let x=cx-40;x<cx+40;x++){
-  for(let z=cz-40;z<cz+40;z++){
+ for(let x=cx-80;x<cx+80;x++){
+  for(let z=cz-80;z<cz+80;z++){
    const h=Math.floor(noise(x,z)*5);
    for(let y=-5;y<=h;y++){
     if(!blocks[key(x,y,z)]){
@@ -201,6 +201,10 @@ function getGround(x,z){
 function animate(){
  requestAnimationFrame(animate);
 
+ // ALWAYS generate terrain FIRST (prevents void rendering)
+ generate(Math.floor(camera.position.x), Math.floor(camera.position.z));
+ requestAnimationFrame(animate);
+
  dir.z=Number(moveF)-Number(moveB);
  dir.x=Number(moveR)-Number(moveL);
  dir.normalize();
@@ -215,6 +219,12 @@ velocity.x*=0.8; velocity.z*=0.8; velocity.y-=gravity;
  tryMove(0,-velocity.z);
 
  camera.position.y+=velocity.y;
+
+ // prevent NaN / runaway values
+ if(!isFinite(camera.position.x) || !isFinite(camera.position.y) || !isFinite(camera.position.z)){
+  camera.position.set(0,20,0);
+  velocity.set(0,0,0);
+ }
 
  // safety clamp (prevents disappearing world bug)
  if(camera.position.y < -50){
@@ -239,7 +249,7 @@ velocity.x*=0.8; velocity.z*=0.8; velocity.y-=gravity;
   onGround = false;
  }
 
- generate(Math.floor(camera.position.x),Math.floor(camera.position.z));
+ // already generated at top of frame
  renderer.render(scene,camera);
 }
 animate();
