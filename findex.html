@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Movement + Collision</title>
+<title>W Forward Only</title>
 <style>
 body { margin:0; overflow:hidden; }
 #overlay {
@@ -14,16 +14,14 @@ body { margin:0; overflow:hidden; }
 </head>
 <body tabindex="0">
 
-<div id="overlay">CLICK TO PLAY</div>
+<div id="overlay">CLICK TO START</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-// ===== SCENE =====
+// ===== BASIC SETUP =====
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth, innerHeight);
@@ -31,40 +29,16 @@ document.body.appendChild(renderer.domElement);
 
 // light
 const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(20,50,20);
+light.position.set(5,10,5);
 scene.add(light);
 
-// ===== BLOCK SYSTEM =====
-const geometry = new THREE.BoxGeometry(1,1,1);
-const material = new THREE.MeshLambertMaterial({color:0x55aa55});
-
-const blocks = new Map();
-function key(x,y,z){ return `${x},${y},${z}`; }
-
-function addBlock(x,y,z,color=0x55aa55){
- const mesh = new THREE.Mesh(
-  geometry,
-  new THREE.MeshLambertMaterial({color})
- );
- mesh.position.set(x,y,z);
- scene.add(mesh);
- blocks.set(key(x,y,z), mesh);
-}
-
-function hasBlock(x,y,z){
- return blocks.has(key(Math.round(x),Math.round(y),Math.round(z)));
-}
-
-// ===== WORLD =====
-for(let x=-20;x<20;x++){
- for(let z=-20;z<20;z++){
-  const h = Math.floor(Math.sin(x*0.2)+Math.cos(z*0.2));
-
-  for(let y=-3;y<=h;y++){
-   addBlock(x,y,z,0x55aa55);
-  }
- }
-}
+// ground
+const ground = new THREE.Mesh(
+ new THREE.BoxGeometry(50,1,50),
+ new THREE.MeshLambertMaterial({color:0x00aa00})
+);
+ground.position.y = -1;
+scene.add(ground);
 
 // ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
@@ -79,116 +53,46 @@ overlay.onclick = ()=>{
 
 document.addEventListener('pointerlockchange', ()=>{
  if(document.pointerLockElement === document.body){
-  overlay.style.display='none';
+  overlay.style.display = 'none';
  } else {
-  overlay.style.display='flex';
+  overlay.style.display = 'flex';
  }
 });
 
-// ===== PLAYER =====
-const playerHeight = 1.8;
-let velocityY = 0;
-
-camera.position.set(0,10,0);
-
 // ===== INPUT =====
-const keys = {};
+let forward = false;
 
-window.onkeydown = e => keys[e.code] = true;
-window.onkeyup   = e => keys[e.code] = false;
-
-// ===== COLLISION =====
-function canMove(x,z,y){
- const px = Math.round(x);
- const pz = Math.round(z);
-
- // check feet + head
- for(let i=0;i<2;i++){
-  if(hasBlock(px, Math.floor(y)-i, pz)){
-   return false;
-  }
+window.onkeydown = (e)=>{
+ if(e.code === 'KeyW'){
+  forward = true;
+  console.log("W pressed");
  }
- return true;
-}
+};
 
-function getGround(x,z){
- let max = -Infinity;
-
- for(const k of blocks.keys()){
-  const [bx,by,bz] = k.split(',').map(Number);
-
-  if(Math.round(bx)===Math.round(x) && Math.round(bz)===Math.round(z)){
-   if(by > max) max = by;
-  }
+window.onkeyup = (e)=>{
+ if(e.code === 'KeyW'){
+  forward = false;
  }
+};
 
- return max === -Infinity ? -3 : max;
-}
+// start position
+camera.position.set(0,2,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.12;
+ const speed = 0.1;
  const angle = camera.rotation.y;
 
- let dx = 0;
- let dz = 0;
-
- // ✅ FORWARD (based on look direction)
- if(keys['KeyW']){
-  dx += -Math.sin(angle) * speed;
-  dz += -Math.cos(angle) * speed;
- }
-
- // ✅ BACKWARD
- if(keys['KeyS']){
-  dx += Math.sin(angle) * speed;
-  dz += Math.cos(angle) * speed;
- }
-
- // ✅ LEFT
- if(keys['KeyA']){
-  dx += -Math.cos(angle) * speed;
-  dz += Math.sin(angle) * speed;
- }
-
- // ✅ RIGHT
- if(keys['KeyD']){
-  dx += Math.cos(angle) * speed;
-  dz += -Math.sin(angle) * speed;
- }
-
- const newX = camera.position.x + dx;
- const newZ = camera.position.z + dz;
-
- if(canMove(newX, newZ, camera.position.y)){
-  camera.position.x = newX;
-  camera.position.z = newZ;
- }
-
- // gravity
- velocityY -= 0.01;
- camera.position.y += velocityY;
-
- const ground = getGround(camera.position.x, camera.position.z);
- const floor = ground + playerHeight;
-
- if(camera.position.y <= floor){
-  camera.position.y = floor;
-  velocityY = 0;
+ if(forward){
+  camera.position.x += -Math.sin(angle) * speed;
+  camera.position.z += -Math.cos(angle) * speed;
  }
 
  renderer.render(scene,camera);
 }
 animate();
-
-// resize
-window.addEventListener('resize',()=>{
- camera.aspect = innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-});
 </script>
 
 </body>
