@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Real Chunk Engine)</title>
+<title>Minecraft Clone (Fixed Pointer Lock)</title>
 <style>
 body { margin:0; overflow:hidden; }
 #overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
@@ -31,28 +31,23 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(50,100,50);
 scene.add(light);
 
-// ===== BLOCK SYSTEM =====
+// ===== BLOCKS =====
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshLambertMaterial({color:0x55aa55});
 
 const blocks = new Map();
 function key(x,y,z){return `${x},${y},${z}`;}
 
-function addBlock(x,y,z){
- if(blocks.has(key(x,y,z))) return;
- const mesh = new THREE.Mesh(geometry, material);
- mesh.position.set(x,y,z);
- scene.add(mesh);
- blocks.set(key(x,y,z), mesh);
+function hasBlock(x,y,z){
+ return blocks.has(key(Math.round(x),Math.round(y),Math.round(z)));
 }
 
-// ===== CHUNK SYSTEM =====
+// ===== CHUNKS =====
 const CHUNK_SIZE = 16;
 const RENDER_DISTANCE = 2;
 const chunks = new Map();
 
 function chunkKey(cx,cz){return `${cx},${cz}`;}
-
 function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
 
 function generateChunk(cx,cz){
@@ -91,45 +86,77 @@ function updateChunks(){
  }
 }
 
-// ===== CONTROLS =====
+// ===== CONTROLS (FIXED) =====
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
 const overlay=document.getElementById('overlay');
-document.getElementById('startBtn').onclick=()=>controls.lock();
-controls.addEventListener('lock',()=>overlay.style.display='none');
-controls.addEventListener('unlock',()=>overlay.style.display='flex');
+const startBtn=document.getElementById('startBtn');
+
+// IMPORTANT FIX: must be inside real user click event
+startBtn.addEventListener('click', () => {
+ try {
+  controls.lock();
+ } catch(e) {
+  console.warn('Pointer lock failed:', e);
+ }
+});
+
+controls.addEventListener('lock',()=>{
+ overlay.style.display='none';
+});
+
+controls.addEventListener('unlock',()=>{
+ overlay.style.display='flex';
+});
+
+// fallback: click anywhere also locks
+document.addEventListener('click', () => {
+ if(!controls.isLocked){
+  try { controls.lock(); } catch(e){}
+ }
+});
 
 // ===== MOVEMENT =====
-let velocity = new THREE.Vector3();
-let dir = new THREE.Vector3();
-let moveF,moveB,moveL,moveR;
-let gravity = 0.04;
-let onGround=false;
+let moveQueue = [];
+let moving = false;
+const playerHeight = 1.8;
 
 camera.position.set(0,10,0);
 
 window.addEventListener('keydown',e=>{
- if(e.code==='KeyW')moveF=true;
- if(e.code==='KeyS')moveB=true;
- if(e.code==='KeyA')moveL=true;
- if(e.code==='KeyD')moveR=true;
+ if(moving) return;
+
+ if(e.code==='KeyW') moveQueue.push({x:0,z:-1});
+ if(e.code==='KeyS') moveQueue.push({x:0,z:1});
+ if(e.code==='KeyA') moveQueue.push({x:-1,z:0});
+ if(e.code==='KeyD') moveQueue.push({x:1,z:0});
 });
-window.addEventListener('keyup',e=>{
- if(e.code==='KeyW')moveF=false;
- if(e.code==='KeyS')moveB=false;
- if(e.code==='KeyA')moveL=false;
- if(e.code==='KeyD')moveR=false;
-});
+
+function tryMoveStep(stepX, stepZ){
+ const targetX = Math.round(camera.position.x) + stepX;
+ const targetZ = Math.round(camera.position.z) + stepZ;
+ const y = camera.position.y;
+
+ for(let i=0;i<2;i++){
+  if(hasBlock(targetX, Math.floor(y)-i, targetZ)){
+   return false;
+  }
+ }
+
+ camera.position.x = targetX;
+ camera.position.z = targetZ;
+ return true;
+}
 
 function getGround(x,z){
  let max=-Infinity;
- blocks.forEach((v,k)=>{
+ for(const k of blocks.keys()){
   const [bx,by,bz]=k.split(',').map(Number);
   if(Math.round(bx)===Math.round(x)&&Math.round(bz)===Math.round(z)){
    if(by>max) max=by;
   }
- });
+ }
  return max===-Infinity ? -5 : max;
 }
 
@@ -139,28 +166,25 @@ function animate(){
 
  updateChunks();
 
- dir.z=Number(moveF)-Number(moveB);
- dir.x=Number(moveR)-Number(moveL);
- dir.normalize();
+ if(!moving && moveQueue.length > 0){
+  const step = moveQueue.shift();
+  moving = true;
 
- const speed=0.05;
- velocity.x*=0.8; velocity.z*=0.8; velocity.y-=gravity;
- if(moveF||moveB) velocity.z-=dir.z*speed;
- if(moveL||moveR) velocity.x-=dir.x*speed;
+  tryMoveStep(step.x, step.z);
 
- controls.moveRight(-velocity.x);
- controls.moveForward(-velocity.z);
-
- camera.position.y+=velocity.y;
+  setTimeout(()=>{
+    moving = false;
+  },120);
+ }
 
  const ground = getGround(camera.position.x,camera.position.z);
- const floor = ground + 1.8;
+ const floor = ground + playerHeight;
 
  if(camera.position.y <= floor){
   camera.position.y = floor;
-  velocity.y = 0;
-  onGround=true;
- } else onGround=false;
+ } else {
+  camera.position.y -= 0.1;
+ }
 
  renderer.render(scene,camera);
 }
