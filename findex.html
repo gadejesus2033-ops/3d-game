@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Clone (Keyboard FIXED)</title>
+<title>Minecraft Clone (Expanded Build)</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -38,20 +38,27 @@ body { margin:0; overflow:hidden; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-// ===== SETUP =====
+
+// =========================
+// SECTION 1: SCENE SETUP
+// =========================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// Lighting
 const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(50,100,50);
 scene.add(light);
 
-// ===== DATA =====
+// =========================
+// SECTION 2: BLOCK SYSTEM
+// =========================
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshLambertMaterial({color:0x55aa55});
 
@@ -69,13 +76,18 @@ function getGround(x,z){
  return heightMap.get(colKey(Math.round(x),Math.round(z))) ?? -5;
 }
 
-// ===== CHUNKS =====
+// =========================
+// SECTION 3: WORLD GENERATION
+// =========================
 const CHUNK_SIZE = 16;
 const RENDER_DISTANCE = 2;
 const chunks = new Map();
 
 function chunkKey(cx,cz){ return `${cx},${cz}`; }
-function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
+
+function noise(x,z){
+ return Math.sin(x*0.1)*Math.cos(z*0.1);
+}
 
 function generateChunk(cx,cz){
  const k = chunkKey(cx,cz);
@@ -88,8 +100,8 @@ function generateChunk(cx,cz){
 
    const worldX = cx*CHUNK_SIZE + x;
    const worldZ = cz*CHUNK_SIZE + z;
-   const h = Math.floor(noise(worldX,worldZ)*5);
 
+   const h = Math.floor(noise(worldX,worldZ)*5);
    heightMap.set(colKey(worldX,worldZ), h);
 
    for(let y=-5;y<=h;y++){
@@ -131,7 +143,9 @@ function updateChunks(){
  }
 }
 
-// ===== CONTROLS (FIXED) =====
+// =========================
+// SECTION 4: CONTROLS
+// =========================
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
@@ -139,13 +153,10 @@ const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
 const crosshair = document.getElementById('crosshair');
 
-// force focus
 document.body.setAttribute('tabindex','0');
 document.body.focus();
 
-startBtn.onclick = () => {
- document.body.requestPointerLock();
-};
+startBtn.onclick = () => document.body.requestPointerLock();
 
 document.addEventListener('pointerlockchange', () => {
  if(document.pointerLockElement === document.body){
@@ -157,20 +168,25 @@ document.addEventListener('pointerlockchange', () => {
  }
 });
 
-// ===== PLAYER =====
+// =========================
+// SECTION 5: PLAYER
+// =========================
 let velocityY = 0;
 const playerHeight = 1.8;
 
 camera.position.set(0,20,0);
 
-// ===== INPUT (GUARANTEED WORKING) =====
-const keys = { w:false, a:false, s:false, d:false };
+// =========================
+// SECTION 6: INPUT SYSTEM
+// =========================
+const keys = { w:false, a:false, s:false, d:false, shift:false };
 
 document.addEventListener('keydown', e=>{
  if(e.code==='KeyW') keys.w=true;
  if(e.code==='KeyS') keys.s=true;
  if(e.code==='KeyA') keys.a=true;
  if(e.code==='KeyD') keys.d=true;
+ if(e.code==='ShiftLeft') keys.shift=true;
 
  if(e.code==='Space' && velocityY===0){
   velocityY = 0.25;
@@ -182,9 +198,12 @@ document.addEventListener('keyup', e=>{
  if(e.code==='KeyS') keys.s=false;
  if(e.code==='KeyA') keys.a=false;
  if(e.code==='KeyD') keys.d=false;
+ if(e.code==='ShiftLeft') keys.shift=false;
 });
 
-// ===== COLLISION =====
+// =========================
+// SECTION 7: COLLISION
+// =========================
 function canStand(x,z,y){
  const px = Math.round(x);
  const pz = Math.round(z);
@@ -197,33 +216,36 @@ function canStand(x,z,y){
  return true;
 }
 
-// ===== LOOP =====
+// =========================
+// SECTION 8: GAME LOOP
+// =========================
 function animate(){
  requestAnimationFrame(animate);
 
  updateChunks();
 
- const speed = 0.1;
+ const baseSpeed = keys.shift ? 0.2 : 0.1;
+
  let moveX = 0;
  let moveZ = 0;
 
  const angle = camera.rotation.y;
 
  if(keys.w){
-  moveX += -Math.sin(angle) * speed;
-  moveZ += -Math.cos(angle) * speed;
+  moveX += -Math.sin(angle) * baseSpeed;
+  moveZ += -Math.cos(angle) * baseSpeed;
  }
  if(keys.s){
-  moveX += Math.sin(angle) * speed;
-  moveZ += Math.cos(angle) * speed;
+  moveX += Math.sin(angle) * baseSpeed;
+  moveZ += Math.cos(angle) * baseSpeed;
  }
  if(keys.a){
-  moveX += -Math.cos(angle) * speed;
-  moveZ += Math.sin(angle) * speed;
+  moveX += -Math.cos(angle) * baseSpeed;
+  moveZ += Math.sin(angle) * baseSpeed;
  }
  if(keys.d){
-  moveX += Math.cos(angle) * speed;
-  moveZ += -Math.sin(angle) * speed;
+  moveX += Math.cos(angle) * baseSpeed;
+  moveZ += -Math.sin(angle) * baseSpeed;
  }
 
  const newX = camera.position.x + moveX;
@@ -250,13 +272,15 @@ function animate(){
 }
 animate();
 
-// resize
+// =========================
+// SECTION 9: RESIZE
+// =========================
 window.addEventListener('resize',()=>{
  camera.aspect = innerWidth/innerHeight;
  camera.updateProjectionMatrix();
  renderer.setSize(innerWidth,innerHeight);
 });
-</script>
 
+</script>
 </body>
 </html>
