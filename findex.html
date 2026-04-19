@@ -2,10 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Minecraft Clone (Fixed Pointer Lock)</title>
+<title>Minecraft Clone (Unified System)</title>
 <style>
 body { margin:0; overflow:hidden; }
-#overlay { position:absolute; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; }
+#overlay {
+ position:absolute; inset:0;
+ background:rgba(0,0,0,.6);
+ display:flex; align-items:center; justify-content:center;
+ flex-direction:column; color:white;
+}
 </style>
 </head>
 <body>
@@ -17,6 +22,7 @@ body { margin:0; overflow:hidden; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
+
 <script>
 // ===== SETUP =====
 const scene = new THREE.Scene();
@@ -31,15 +37,22 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(50,100,50);
 scene.add(light);
 
-// ===== BLOCKS =====
+// ===== DATA =====
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshLambertMaterial({color:0x55aa55});
 
 const blocks = new Map();
-function key(x,y,z){return `${x},${y},${z}`;}
+const heightMap = new Map();
+
+function key(x,y,z){ return `${x},${y},${z}`; }
+function colKey(x,z){ return `${x},${z}`; }
 
 function hasBlock(x,y,z){
- return blocks.has(key(Math.round(x),Math.round(y),Math.round(z)));
+ return blocks.has(key(x,y,z));
+}
+
+function getGround(x,z){
+ return heightMap.get(colKey(x,z)) ?? -5;
 }
 
 // ===== CHUNKS =====
@@ -47,24 +60,28 @@ const CHUNK_SIZE = 16;
 const RENDER_DISTANCE = 2;
 const chunks = new Map();
 
-function chunkKey(cx,cz){return `${cx},${cz}`;}
+function chunkKey(cx,cz){ return `${cx},${cz}`; }
 function noise(x,z){ return Math.sin(x*0.1)*Math.cos(z*0.1); }
 
 function generateChunk(cx,cz){
- const keyC = chunkKey(cx,cz);
- if(chunks.has(keyC)) return;
+ const k = chunkKey(cx,cz);
+ if(chunks.has(k)) return;
 
  const group = new THREE.Group();
 
  for(let x=0;x<CHUNK_SIZE;x++){
   for(let z=0;z<CHUNK_SIZE;z++){
+
    const worldX = cx*CHUNK_SIZE + x;
    const worldZ = cz*CHUNK_SIZE + z;
    const h = Math.floor(noise(worldX,worldZ)*5);
 
+   heightMap.set(colKey(worldX,worldZ), h);
+
    for(let y=-5;y<=h;y++){
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(worldX,y,worldZ);
+
     group.add(mesh);
     blocks.set(key(worldX,y,worldZ), mesh);
    }
@@ -72,7 +89,7 @@ function generateChunk(cx,cz){
  }
 
  scene.add(group);
- chunks.set(keyC, group);
+ chunks.set(k, group);
 }
 
 function updateChunks(){
@@ -84,80 +101,94 @@ function updateChunks(){
    generateChunk(cx+x, cz+z);
   }
  }
+
+ for(const [k, group] of chunks){
+  const [x,z] = k.split(',').map(Number);
+
+  if(Math.abs(x-cx)>RENDER_DISTANCE || Math.abs(z-cz)>RENDER_DISTANCE){
+
+   group.children.forEach(mesh=>{
+    const {x,y,z} = mesh.position;
+    blocks.delete(key(x,y,z));
+   });
+
+   scene.remove(group);
+   chunks.delete(k);
+  }
+ }
 }
 
-// ===== CONTROLS (FIXED) =====
+// ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
-const overlay=document.getElementById('overlay');
-const startBtn=document.getElementById('startBtn');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
 
-// IMPORTANT FIX: must be inside real user click event
-startBtn.addEventListener('click', () => {
- try {
+startBtn.onclick = ()=>controls.lock();
+
+controls.addEventListener('lock',()=>overlay.style.display='none');
+controls.addEventListener('unlock',()=>overlay.style.display='flex');
+
+document.addEventListener('click', (e)=>{
+ if(e.target.id !== "startBtn" && !controls.isLocked){
   controls.lock();
- } catch(e) {
-  console.warn('Pointer lock failed:', e);
  }
 });
 
-controls.addEventListener('lock',()=>{
- overlay.style.display='none';
-});
-
-controls.addEventListener('unlock',()=>{
- overlay.style.display='flex';
-});
-
-// fallback: click anywhere also locks
-document.addEventListener('click', () => {
- if(!controls.isLocked){
-  try { controls.lock(); } catch(e){}
- }
-});
-
-// ===== MOVEMENT =====
-let moveQueue = [];
-let moving = false;
+// ===== PLAYER =====
+let velocityY = 0;
 const playerHeight = 1.8;
+
+let moveQueue = [];
+let moveCooldown = 0;
+const MOVE_DELAY = 0.12;
 
 camera.position.set(0,10,0);
 
+// INPUT
 window.addEventListener('keydown',e=>{
- if(moving) return;
-
  if(e.code==='KeyW') moveQueue.push({x:0,z:-1});
  if(e.code==='KeyS') moveQueue.push({x:0,z:1});
  if(e.code==='KeyA') moveQueue.push({x:-1,z:0});
  if(e.code==='KeyD') moveQueue.push({x:1,z:0});
+
+ if(e.code==='Space' && velocityY === 0){
+  velocityY = 0.25;
+ }
 });
 
-function tryMoveStep(stepX, stepZ){
- const targetX = Math.round(camera.position.x) + stepX;
- const targetZ = Math.round(camera.position.z) + stepZ;
- const y = camera.position.y;
+// COLLISION
+function canStand(x,z,y){
+ const px = Math.round(x);
+ const pz = Math.round(z);
 
- for(let i=0;i<2;i++){
-  if(hasBlock(targetX, Math.floor(y)-i, targetZ)){
+ for(let dy=0; dy<2; dy++){
+  if(hasBlock(px, Math.floor(y)-dy, pz)){
    return false;
   }
  }
-
- camera.position.x = targetX;
- camera.position.z = targetZ;
  return true;
 }
 
-function getGround(x,z){
- let max=-Infinity;
- for(const k of blocks.keys()){
-  const [bx,by,bz]=k.split(',').map(Number);
-  if(Math.round(bx)===Math.round(x)&&Math.round(bz)===Math.round(z)){
-   if(by>max) max=by;
+function tryMove(dx,dz){
+ const tx = Math.round(camera.position.x) + dx;
+ const tz = Math.round(camera.position.z) + dz;
+ const ground = getGround(tx,tz);
+
+ const targetY = ground + playerHeight;
+
+ // allow stepping up 1 block
+ if(targetY - camera.position.y <= 1.1){
+  if(canStand(tx,tz,targetY)){
+   camera.position.x = tx;
+   camera.position.z = tz;
+   camera.position.y = targetY;
+   return true;
   }
  }
- return max===-Infinity ? -5 : max;
+
+ return false;
 }
 
 // ===== LOOP =====
@@ -166,35 +197,39 @@ function animate(){
 
  updateChunks();
 
- if(!moving && moveQueue.length > 0){
+ // movement
+ moveCooldown -= 0.016;
+
+ if(moveCooldown<=0 && moveQueue.length){
   const step = moveQueue.shift();
-  moving = true;
-
-  tryMoveStep(step.x, step.z);
-
-  setTimeout(()=>{
-    moving = false;
-  },120);
+  if(tryMove(step.x, step.z)){
+   moveCooldown = MOVE_DELAY;
+  }
  }
 
- const ground = getGround(camera.position.x,camera.position.z);
+ // gravity
+ velocityY -= 0.01;
+ camera.position.y += velocityY;
+
+ const ground = getGround(camera.position.x, camera.position.z);
  const floor = ground + playerHeight;
 
  if(camera.position.y <= floor){
   camera.position.y = floor;
- } else {
-  camera.position.y -= 0.1;
+  velocityY = 0;
  }
 
  renderer.render(scene,camera);
 }
 animate();
 
+// resize
 window.addEventListener('resize',()=>{
- camera.aspect=innerWidth/innerHeight;
+ camera.aspect = innerWidth/innerHeight;
  camera.updateProjectionMatrix();
  renderer.setSize(innerWidth,innerHeight);
 });
 </script>
+
 </body>
 </html>
