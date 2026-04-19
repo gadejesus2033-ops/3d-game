@@ -174,13 +174,15 @@ function tryMove(dx,dz){
 }
 
 function getGround(x,z){
- let max=-Infinity;
+ let max = -Infinity;
  for(const k in blocks){
   const [bx,by,bz]=k.split(',').map(Number);
   if(Math.round(bx)===Math.round(x)&&Math.round(bz)===Math.round(z)){
    if(by>max) max=by;
   }
  }
+ // FIX: prevent falling into void
+ if(max === -Infinity) return -5; 
  return max;
 }
 
@@ -191,14 +193,22 @@ function animate(){
  dir.x=Number(moveR)-Number(moveL);
  dir.normalize();
 
- velocity.x*=0.9; velocity.z*=0.9; velocity.y-=gravity;
- if(moveF||moveB) velocity.z-=dir.z*0.1;
- if(moveL||moveR) velocity.x-=dir.x*0.1;
+ // slower movement tuning
+const walkSpeed = 0.05;
+velocity.x*=0.8; velocity.z*=0.8; velocity.y-=gravity;
+ if(moveF||moveB) velocity.z-=dir.z*walkSpeed;
+ if(moveL||moveR) velocity.x-=dir.x*walkSpeed;
 
  tryMove(-velocity.x,0);
  tryMove(0,-velocity.z);
 
  camera.position.y+=velocity.y;
+
+ // safety clamp (prevents disappearing world bug)
+ if(camera.position.y < -50){
+  camera.position.y = 20;
+  velocity.y = 0;
+ }
 
  // ceiling collision
  if(blockAt(camera.position.x, Math.floor(camera.position.y), camera.position.z)){
