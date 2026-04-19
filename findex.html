@@ -1,286 +1,121 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Clone (Expanded Build)</title>
-
+<title>Keyboard FIX</title>
 <style>
 body { margin:0; overflow:hidden; }
-
 #overlay {
  position:absolute; inset:0;
- background:rgba(0,0,0,.6);
+ background:black; color:white;
  display:flex; align-items:center; justify-content:center;
- flex-direction:column; color:white;
-}
-
-#crosshair {
- position:absolute;
- top:50%; left:50%;
- width:6px; height:6px;
- background:white;
- transform:translate(-50%,-50%);
- border-radius:50%;
- display:none;
 }
 </style>
 </head>
-<body>
+<body tabindex="0">
 
-<div id="overlay">
-<h1>Click to Play</h1>
-<button id="startBtn">Start</button>
-</div>
-
-<div id="crosshair"></div>
+<div id="overlay">CLICK HERE FIRST</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-
-// =========================
-// SECTION 1: SCENE SETUP
-// =========================
+// ===== SCENE =====
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Lighting
+// light + ground
 const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(50,100,50);
+light.position.set(5,10,5);
 scene.add(light);
 
-// =========================
-// SECTION 2: BLOCK SYSTEM
-// =========================
-const geometry = new THREE.BoxGeometry(1,1,1);
-const material = new THREE.MeshLambertMaterial({color:0x55aa55});
+const ground = new THREE.Mesh(
+ new THREE.BoxGeometry(50,1,50),
+ new THREE.MeshLambertMaterial({color:0x00aa00})
+);
+ground.position.y = -1;
+scene.add(ground);
 
-const blocks = new Map();
-const heightMap = new Map();
-
-function key(x,y,z){ return `${x},${y},${z}`; }
-function colKey(x,z){ return `${x},${z}`; }
-
-function hasBlock(x,y,z){
- return blocks.has(key(Math.round(x),Math.round(y),Math.round(z)));
-}
-
-function getGround(x,z){
- return heightMap.get(colKey(Math.round(x),Math.round(z))) ?? -5;
-}
-
-// =========================
-// SECTION 3: WORLD GENERATION
-// =========================
-const CHUNK_SIZE = 16;
-const RENDER_DISTANCE = 2;
-const chunks = new Map();
-
-function chunkKey(cx,cz){ return `${cx},${cz}`; }
-
-function noise(x,z){
- return Math.sin(x*0.1)*Math.cos(z*0.1);
-}
-
-function generateChunk(cx,cz){
- const k = chunkKey(cx,cz);
- if(chunks.has(k)) return;
-
- const group = new THREE.Group();
-
- for(let x=0;x<CHUNK_SIZE;x++){
-  for(let z=0;z<CHUNK_SIZE;z++){
-
-   const worldX = cx*CHUNK_SIZE + x;
-   const worldZ = cz*CHUNK_SIZE + z;
-
-   const h = Math.floor(noise(worldX,worldZ)*5);
-   heightMap.set(colKey(worldX,worldZ), h);
-
-   for(let y=-5;y<=h;y++){
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(worldX,y,worldZ);
-
-    group.add(mesh);
-    blocks.set(key(worldX,y,worldZ), mesh);
-   }
-  }
- }
-
- scene.add(group);
- chunks.set(k, group);
-}
-
-function updateChunks(){
- const cx = Math.floor(camera.position.x / CHUNK_SIZE);
- const cz = Math.floor(camera.position.z / CHUNK_SIZE);
-
- for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++){
-  for(let z=-RENDER_DISTANCE;z<=RENDER_DISTANCE;z++){
-   generateChunk(cx+x, cz+z);
-  }
- }
-
- for(const [k, group] of chunks){
-  const [x,z] = k.split(',').map(Number);
-
-  if(Math.abs(x-cx)>RENDER_DISTANCE || Math.abs(z-cz)>RENDER_DISTANCE){
-   group.children.forEach(mesh=>{
-    const {x,y,z} = mesh.position;
-    blocks.delete(key(x,y,z));
-   });
-
-   scene.remove(group);
-   chunks.delete(k);
-  }
- }
-}
-
-// =========================
-// SECTION 4: CONTROLS
-// =========================
+// ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
 const overlay = document.getElementById('overlay');
-const startBtn = document.getElementById('startBtn');
-const crosshair = document.getElementById('crosshair');
 
-document.body.setAttribute('tabindex','0');
-document.body.focus();
+// 🔥 IMPORTANT: CLICK HANDLER DOES EVERYTHING
+overlay.onclick = () => {
 
-startBtn.onclick = () => document.body.requestPointerLock();
+ // force focus FIRST
+ document.body.focus();
 
+ // THEN pointer lock
+ document.body.requestPointerLock();
+
+ console.log("Clicked + Focused");
+};
+
+// pointer lock state
 document.addEventListener('pointerlockchange', () => {
  if(document.pointerLockElement === document.body){
   overlay.style.display = 'none';
-  crosshair.style.display = 'block';
+  console.log("Pointer lock ON");
  } else {
   overlay.style.display = 'flex';
-  crosshair.style.display = 'none';
  }
 });
 
-// =========================
-// SECTION 5: PLAYER
-// =========================
-let velocityY = 0;
-const playerHeight = 1.8;
+// ===== INPUT (FORCED GLOBAL) =====
+const keys = {};
 
-camera.position.set(0,20,0);
+window.onkeydown = function(e){
+ keys[e.code] = true;
+ console.log("DOWN:", e.code);
+};
 
-// =========================
-// SECTION 6: INPUT SYSTEM
-// =========================
-const keys = { w:false, a:false, s:false, d:false, shift:false };
+window.onkeyup = function(e){
+ keys[e.code] = false;
+};
 
-document.addEventListener('keydown', e=>{
- if(e.code==='KeyW') keys.w=true;
- if(e.code==='KeyS') keys.s=true;
- if(e.code==='KeyA') keys.a=true;
- if(e.code==='KeyD') keys.d=true;
- if(e.code==='ShiftLeft') keys.shift=true;
+// start pos
+camera.position.set(0,2,5);
 
- if(e.code==='Space' && velocityY===0){
-  velocityY = 0.25;
- }
-});
-
-document.addEventListener('keyup', e=>{
- if(e.code==='KeyW') keys.w=false;
- if(e.code==='KeyS') keys.s=false;
- if(e.code==='KeyA') keys.a=false;
- if(e.code==='KeyD') keys.d=false;
- if(e.code==='ShiftLeft') keys.shift=false;
-});
-
-// =========================
-// SECTION 7: COLLISION
-// =========================
-function canStand(x,z,y){
- const px = Math.round(x);
- const pz = Math.round(z);
-
- for(let dy=0; dy<2; dy++){
-  if(hasBlock(px, Math.floor(y)-dy, pz)){
-   return false;
-  }
- }
- return true;
-}
-
-// =========================
-// SECTION 8: GAME LOOP
-// =========================
+// ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- updateChunks();
-
- const baseSpeed = keys.shift ? 0.2 : 0.1;
+ const speed = 0.1;
+ const angle = camera.rotation.y;
 
  let moveX = 0;
  let moveZ = 0;
 
- const angle = camera.rotation.y;
-
- if(keys.w){
-  moveX += -Math.sin(angle) * baseSpeed;
-  moveZ += -Math.cos(angle) * baseSpeed;
+ if(keys['KeyW']){
+  moveX += -Math.sin(angle) * speed;
+  moveZ += -Math.cos(angle) * speed;
  }
- if(keys.s){
-  moveX += Math.sin(angle) * baseSpeed;
-  moveZ += Math.cos(angle) * baseSpeed;
+ if(keys['KeyS']){
+  moveX += Math.sin(angle) * speed;
+  moveZ += Math.cos(angle) * speed;
  }
- if(keys.a){
-  moveX += -Math.cos(angle) * baseSpeed;
-  moveZ += Math.sin(angle) * baseSpeed;
+ if(keys['KeyA']){
+  moveX += -Math.cos(angle) * speed;
+  moveZ += Math.sin(angle) * speed;
  }
- if(keys.d){
-  moveX += Math.cos(angle) * baseSpeed;
-  moveZ += -Math.sin(angle) * baseSpeed;
+ if(keys['KeyD']){
+  moveX += Math.cos(angle) * speed;
+  moveZ += -Math.sin(angle) * speed;
  }
 
- const newX = camera.position.x + moveX;
- const newZ = camera.position.z + moveZ;
-
- if(canStand(newX, newZ, camera.position.y)){
-  camera.position.x = newX;
-  camera.position.z = newZ;
- }
-
- // gravity
- velocityY -= 0.01;
- camera.position.y += velocityY;
-
- const ground = getGround(camera.position.x, camera.position.z);
- const floor = ground + playerHeight;
-
- if(camera.position.y <= floor){
-  camera.position.y = floor;
-  velocityY = 0;
- }
+ camera.position.x += moveX;
+ camera.position.z += moveZ;
 
  renderer.render(scene,camera);
 }
 animate();
-
-// =========================
-// SECTION 9: RESIZE
-// =========================
-window.addEventListener('resize',()=>{
- camera.aspect = innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-});
-
 </script>
+
 </body>
 </html>
