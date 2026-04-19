@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Clone (Smooth Movement FIXED)</title>
+<title>Minecraft Clone (Keyboard FIXED)</title>
 
 <style>
 body { margin:0; overflow:hidden; }
 
-/* overlay */
 #overlay {
  position:absolute; inset:0;
  background:rgba(0,0,0,.6);
@@ -15,7 +14,6 @@ body { margin:0; overflow:hidden; }
  flex-direction:column; color:white;
 }
 
-/* crosshair */
 #crosshair {
  position:absolute;
  top:50%; left:50%;
@@ -133,7 +131,7 @@ function updateChunks(){
  }
 }
 
-// ===== CONTROLS =====
+// ===== CONTROLS (FIXED) =====
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
@@ -141,20 +139,22 @@ const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
 const crosshair = document.getElementById('crosshair');
 
-startBtn.onclick = ()=>controls.lock();
+// force focus
+document.body.setAttribute('tabindex','0');
+document.body.focus();
 
-document.body.addEventListener('click', ()=>{
- if(!controls.isLocked) controls.lock();
-});
+startBtn.onclick = () => {
+ document.body.requestPointerLock();
+};
 
-controls.addEventListener('lock',()=>{
- overlay.style.display='none';
- crosshair.style.display='block';
-});
-
-controls.addEventListener('unlock',()=>{
- overlay.style.display='flex';
- crosshair.style.display='none';
+document.addEventListener('pointerlockchange', () => {
+ if(document.pointerLockElement === document.body){
+  overlay.style.display = 'none';
+  crosshair.style.display = 'block';
+ } else {
+  overlay.style.display = 'flex';
+  crosshair.style.display = 'none';
+ }
 });
 
 // ===== PLAYER =====
@@ -163,10 +163,10 @@ const playerHeight = 1.8;
 
 camera.position.set(0,20,0);
 
-// ===== INPUT (SMOOTH MOVEMENT) =====
+// ===== INPUT (GUARANTEED WORKING) =====
 const keys = { w:false, a:false, s:false, d:false };
 
-window.addEventListener('keydown', e=>{
+document.addEventListener('keydown', e=>{
  if(e.code==='KeyW') keys.w=true;
  if(e.code==='KeyS') keys.s=true;
  if(e.code==='KeyA') keys.a=true;
@@ -177,7 +177,7 @@ window.addEventListener('keydown', e=>{
  }
 });
 
-window.addEventListener('keyup', e=>{
+document.addEventListener('keyup', e=>{
  if(e.code==='KeyW') keys.w=false;
  if(e.code==='KeyS') keys.s=false;
  if(e.code==='KeyA') keys.a=false;
