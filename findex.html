@@ -2,19 +2,20 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Fixed Voxel Engine (Stable)</title>
+<title>Voxel Engine - Fully Fixed</title>
 
 <style>
 body { margin:0; overflow:hidden; }
 #overlay{
  position:absolute;
  inset:0;
- background:black;
- color:white;
+ background:#000;
+ color:#fff;
  display:flex;
  align-items:center;
  justify-content:center;
  font-size:20px;
+ cursor:pointer;
 }
 </style>
 </head>
@@ -26,17 +27,15 @@ body { margin:0; overflow:hidden; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-
-// ================= SCENE =================
+// ================= BASIC SETUP =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1);
-sun.position.set(20, 30, 10);
-scene.add(sun);
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(20,30,10);
+scene.add(light);
 
-// ================= CAMERA =================
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth, innerHeight);
@@ -47,252 +46,208 @@ const geo = new THREE.BoxGeometry(1,1,1);
 
 const mat = {
  grass: new THREE.MeshLambertMaterial({color:0x3cb043}),
- dirt:  new THREE.MeshLambertMaterial({color:0x8b5a2b}),
- stone: new THREE.MeshLambertMaterial({color:0x888888}),
- wood:  new THREE.MeshLambertMaterial({color:0x8b4513}),
- leaves:new THREE.MeshLambertMaterial({color:0x2ecc71})
+ dirt: new THREE.MeshLambertMaterial({color:0x8b5a2b}),
+ stone: new THREE.MeshLambertMaterial({color:0x888888})
 };
 
 const world = new Map();
-const blockMeshes = [];
+const blocks = [];
 
-function key(x,y,z){
- return `${x},${y},${z}`;
-}
+const key = (x,y,z)=>`${x},${y},${z}`;
 
-class Block{
- constructor(x,y,z,type,mesh){
-  this.x=x; this.y=y; this.z=z;
-  this.type=type;
-  this.mesh=mesh;
- }
-}
-
-// ================= BLOCK SYSTEM =================
 function addBlock(x,y,z,type,material){
- const mesh = new THREE.Mesh(geo, material);
+ const mesh = new THREE.Mesh(geo,material);
  mesh.position.set(x,y,z);
  scene.add(mesh);
 
- blockMeshes.push(mesh);
- world.set(key(x,y,z), new Block(x,y,z,type,mesh));
+ blocks.push(mesh);
+ world.set(key(x,y,z), mesh);
 }
 
 function removeBlock(x,y,z){
  const k = key(x,y,z);
- const b = world.get(k);
- if(!b) return;
+ const mesh = world.get(k);
+ if(!mesh) return;
 
- scene.remove(b.mesh);
+ scene.remove(mesh);
  world.delete(k);
 }
 
-// IMPORTANT: strict voxel lookup
-function getBlock(x,y,z){
- return world.get(key(Math.floor(x),Math.floor(y),Math.floor(z)));
-}
-
-// ================= WORLD GEN =================
-for(let x=-20;x<20;x++){
- for(let z=-20;z<20;z++){
+// ================= FLAT WORLD =================
+for(let x=-25;x<25;x++){
+ for(let z=-25;z<25;z++){
   addBlock(x,-1,z,"grass",mat.grass);
   addBlock(x,-2,z,"dirt",mat.dirt);
  }
 }
 
-function mountain(cx,cz){
- for(let x=-8;x<=8;x++){
-  for(let z=-8;z<=8;z++){
-   const d = Math.sqrt(x*x+z*z);
-   const h = Math.floor(6-d);
-   if(h>0){
-    for(let y=0;y<h;y++){
-     addBlock(cx+x,y,cz+z,"stone",mat.stone);
-    }
-   }
-  }
- }
-}
-
-mountain(0,-25);
-mountain(0,25);
-mountain(-25,0);
-mountain(25,0);
-
-function tree(x,z){
- for(let i=0;i<4;i++) addBlock(x,i,z,"wood",mat.wood);
-
- for(let lx=-2;lx<=2;lx++){
-  for(let lz=-2;lz<=2;lz++){
-   for(let ly=3;ly<=5;ly++){
-    if(Math.abs(lx)+Math.abs(lz)<4){
-     addBlock(x+lx,ly,z+lz,"leaves",mat.leaves);
-    }
-   }
-  }
- }
-}
-
-tree(5,5);
-tree(-5,-5);
-
-// ================= CONTROLS =================
-const controls = new THREE.PointerLockControls(camera,document.body);
-scene.add(controls.getObject());
-
-document.getElementById("overlay").onclick=()=>{
- document.body.requestPointerLock();
+// ================= PLAYER =================
+const player = {
+ height: 2,
+ width: 0.6,
+ depth: 0.6
 };
 
-document.addEventListener("pointerlockchange",()=>{
- document.getElementById("overlay").style.display =
- document.pointerLockElement===document.body ? "none":"flex";
-});
+let velY = 0;
+let onGround = false;
 
-// ================= INPUT =================
-const keys={w:false,a:false,s:false,d:false};
+const gravity = -0.015;
+const jumpPower = 0.22;
 
-window.onkeydown=e=>{
- if(e.code==="KeyW")keys.w=true;
- if(e.code==="KeyS")keys.s=true;
- if(e.code==="KeyA")keys.a=true;
- if(e.code==="KeyD")keys.d=true;
-
- if(e.code==="Space" && onGround){
-  velocityY = jumpPower;
-  onGround = false;
- }
-};
-
-window.onkeyup=e=>{
- if(e.code==="KeyW")keys.w=false;
- if(e.code==="KeyS")keys.s=false;
- if(e.code==="KeyA")keys.a=false;
- if(e.code==="KeyD")keys.d=false;
-};
-
-// ================= PLAYER PHYSICS =================
-let velocityY=0;
-const gravity=-0.01;
-const jumpPower=0.2;
-let onGround=false;
-
-const player = {w:0.6,h:2,d:0.6};
-
-// ================= COLLISION =================
-function collides(x,y,z){
- const minX = Math.floor(x - player.w/2);
- const maxX = Math.floor(x + player.w/2);
+// ================= COLLISION (REAL VOXEL AABB) =================
+function collide(x,y,z){
+ const minX = Math.floor(x - player.width/2);
+ const maxX = Math.floor(x + player.width/2);
 
  const minY = Math.floor(y);
- const maxY = Math.floor(y + player.h);
+ const maxY = Math.floor(y + player.height);
 
- const minZ = Math.floor(z - player.d/2);
- const maxZ = Math.floor(z + player.d/2);
+ const minZ = Math.floor(z - player.depth/2);
+ const maxZ = Math.floor(z + player.depth/2);
 
  for(let ix=minX; ix<=maxX; ix++){
   for(let iy=minY; iy<=maxY; iy++){
    for(let iz=minZ; iz<=maxZ; iz++){
-    if(world.has(key(ix,iy,iz))){
-     return true;
-    }
+    if(world.has(key(ix,iy,iz))) return true;
    }
   }
  }
  return false;
 }
 
-// ================= MOVE =================
+// ================= MOVEMENT =================
 function move(dx,dz){
- const nx = camera.position.x + dx;
- const nz = camera.position.z + dz;
+ const steps = 5;
 
- if(!collides(nx,camera.position.y,camera.position.z)){
-  camera.position.x = nx;
- }
+ for(let i=0;i<steps;i++){
+  let sx = dx/steps;
+  let sz = dz/steps;
 
- if(!collides(camera.position.x,camera.position.y,nz)){
-  camera.position.z = nz;
+  let nx = camera.position.x + sx;
+  let nz = camera.position.z + sz;
+
+  if(!collide(nx, camera.position.y, camera.position.z)){
+   camera.position.x = nx;
+  }
+
+  if(!collide(camera.position.x, camera.position.y, nz)){
+   camera.position.z = nz;
+  }
  }
 }
 
+// ================= CONTROLS =================
+const controls = new THREE.PointerLockControls(camera, document.body);
+scene.add(controls.getObject());
+
+document.getElementById("overlay").onclick = () => {
+ document.body.requestPointerLock();
+};
+
+document.addEventListener("pointerlockchange", () => {
+ document.getElementById("overlay").style.display =
+ document.pointerLockElement === document.body ? "none" : "flex";
+});
+
+// ================= INPUT =================
+const keys = {w:false,a:false,s:false,d:false};
+
+window.onkeydown = e => {
+ if(e.code==="KeyW") keys.w=true;
+ if(e.code==="KeyA") keys.a=true;
+ if(e.code==="KeyS") keys.s=true;
+ if(e.code==="KeyD") keys.d=true;
+
+ if(e.code==="Space" && onGround){
+  velY = jumpPower;
+  onGround = false;
+ }
+};
+
+window.onkeyup = e => {
+ if(e.code==="KeyW") keys.w=false;
+ if(e.code==="KeyA") keys.a=false;
+ if(e.code==="KeyS") keys.s=false;
+ if(e.code==="KeyD") keys.d=false;
+};
+
 // ================= RAYCAST =================
-const raycaster = new THREE.Raycaster();
+const ray = new THREE.Raycaster();
 
-window.addEventListener("mousedown",(e)=>{
- raycaster.setFromCamera({x:0,y:0},camera);
+window.addEventListener("mousedown", e => {
+ ray.setFromCamera({x:0,y:0}, camera);
 
- const hits = raycaster.intersectObjects(blockMeshes);
- if(!hits.length) return;
+ const hit = ray.intersectObjects(blocks);
+ if(!hit.length) return;
 
- const pos = hits[0].object.position;
+ const p = hit[0].object.position;
 
- const x = Math.floor(pos.x);
- const y = Math.floor(pos.y);
- const z = Math.floor(pos.z);
+ const x = Math.floor(p.x);
+ const y = Math.floor(p.y);
+ const z = Math.floor(p.z);
 
- if(e.button===0){
+ if(e.button === 0){
   removeBlock(x,y,z);
  }
 
- if(e.button===2){
-  if(!getBlock(x,y+1,z)){
+ if(e.button === 2){
+  if(!world.has(key(x,y+1,z))){
    addBlock(x,y+1,z,"stone",mat.stone);
   }
  }
 });
 
-window.addEventListener("contextmenu",e=>e.preventDefault());
+window.addEventListener("contextmenu", e => e.preventDefault());
 
 // ================= START POSITION =================
-camera.position.set(0,10,5);
+camera.position.set(0,5,5);
 
 // ================= LOOP =================
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.1;
+ const speed = 0.12;
 
- const forward = new THREE.Vector3();
- camera.getWorldDirection(forward);
- forward.y = 0;
- forward.normalize();
+ const dir = new THREE.Vector3();
+ camera.getWorldDirection(dir);
+ dir.y = 0;
+ dir.normalize();
 
  const right = new THREE.Vector3();
- right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
+ right.crossVectors(dir, new THREE.Vector3(0,1,0)).normalize();
 
- let dx=0,dz=0;
+ let dx = 0, dz = 0;
 
- if(keys.w){dx += forward.x*speed; dz += forward.z*speed;}
- if(keys.s){dx -= forward.x*speed; dz -= forward.z*speed;}
- if(keys.a){dx -= right.x*speed; dz -= right.z*speed;}
- if(keys.d){dx += right.x*speed; dz += right.z*speed;}
+ if(keys.w){ dx += dir.x * speed; dz += dir.z * speed; }
+ if(keys.s){ dx -= dir.x * speed; dz -= dir.z * speed; }
+ if(keys.a){ dx -= right.x * speed; dz -= right.z * speed; }
+ if(keys.d){ dx += right.x * speed; dz += right.z * speed; }
 
- move(dx,dz);
+ move(dx, dz);
 
- // gravity
- velocityY += gravity;
- camera.position.y += velocityY;
+ // ================= GRAVITY =================
+ velY += gravity;
+ camera.position.y += velY;
 
- // ground collision (FIXED)
- const feet = camera.position.y - 1.9;
+ const feet = camera.position.y - player.height;
 
- if(collides(camera.position.x, feet, camera.position.z)){
+ if(collide(camera.position.x, feet, camera.position.z)){
   camera.position.y = Math.ceil(camera.position.y);
-  velocityY = 0;
+  velY = 0;
   onGround = true;
  }
 
- renderer.render(scene,camera);
+ renderer.render(scene, camera);
 }
 animate();
 
-window.addEventListener("resize",()=>{
- camera.aspect = innerWidth/innerHeight;
+window.addEventListener("resize", () => {
+ camera.aspect = innerWidth / innerHeight;
  camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
+ renderer.setSize(innerWidth, innerHeight);
 });
 
 </script>
+
 </body>
 </html>
