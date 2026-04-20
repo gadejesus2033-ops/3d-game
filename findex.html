@@ -2,12 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game - Final Build</title>
+<title>Voxel Multiplayer - Final</title>
 
 <style>
 body { margin:0; overflow:hidden; }
 
-/* Overlay */
 #overlay{
  position:absolute;
  inset:0;
@@ -16,11 +15,9 @@ body { margin:0; overflow:hidden; }
  display:flex;
  align-items:center;
  justify-content:center;
- font-size:20px;
  cursor:pointer;
 }
 
-/* Crosshair */
 #crosshair{
  position:fixed;
  left:50%;
@@ -35,23 +32,12 @@ body { margin:0; overflow:hidden; }
  position:absolute;
  background:white;
 }
-#crosshair:before{
- width:10px;
- height:2px;
- top:4px;
- left:0;
-}
-#crosshair:after{
- width:2px;
- height:10px;
- left:4px;
- top:0;
-}
+#crosshair:before{width:10px;height:2px;top:4px;}
+#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
 <body>
-
 <div id="overlay">CLICK TO START</div>
 <div id="crosshair"></div>
 
@@ -64,24 +50,24 @@ body { margin:0; overflow:hidden; }
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1);
-sun.position.set(20,30,10);
-scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(20,30,10);
+scene.add(light);
 
 // ================= CAMERA =================
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // ================= WORLD =================
 const geo = new THREE.BoxGeometry(1,1,1);
 
 const mat = {
- grass:new THREE.MeshLambertMaterial({color:0x3cb043, side:THREE.DoubleSide}),
- dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b, side:THREE.DoubleSide}),
- stone:new THREE.MeshLambertMaterial({color:0x888888, side:THREE.DoubleSide})
+ grass:new THREE.MeshLambertMaterial({color:0x3cb043,side:THREE.DoubleSide}),
+ dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b,side:THREE.DoubleSide}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888,side:THREE.DoubleSide})
 };
 
 const world = new Map();
@@ -89,11 +75,11 @@ const meshes = [];
 
 const key=(x,y,z)=>`${x},${y},${z}`;
 
-function add(x,y,z,material){
- const m=new THREE.Mesh(geo,material);
- m.position.set(x,y,z);
- scene.add(m);
- meshes.push(m);
+function add(x,y,z,m){
+ const mesh=new THREE.Mesh(geo,m);
+ mesh.position.set(x,y,z);
+ scene.add(mesh);
+ meshes.push(mesh);
  world.set(key(x,y,z),1);
 }
 
@@ -106,7 +92,7 @@ function remove(x,y,z){
  if(obj) scene.remove(obj);
 }
 
-// ================= WORLD GEN =================
+// world
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
   add(x,-1,z,mat.grass);
@@ -115,14 +101,8 @@ for(let x=-25;x<25;x++){
 }
 
 // ================= PLAYER =================
-const player={
- width:0.98,
- depth:0.98,
- height:2
-};
-
-let velY=0;
-let onGround=false;
+const player={width:0.98,depth:0.98,height:2};
+let velY=0,onGround=false;
 
 const gravity=-0.015;
 const jumpPower=0.22;
@@ -130,17 +110,17 @@ const jumpPower=0.22;
 // ================= COLLISION =================
 function collide(px,py,pz){
 
- const halfW = player.width/2;
- const halfD = player.depth/2;
+ const hw=player.width/2;
+ const hd=player.depth/2;
 
- const minX = Math.floor(px-halfW);
- const maxX = Math.floor(px+halfW);
+ const minX=Math.floor(px-hw);
+ const maxX=Math.floor(px+hw);
 
- const minY = Math.floor(py);
- const maxY = Math.floor(py+player.height-0.001);
+ const minY=Math.floor(py);
+ const maxY=Math.floor(py+player.height-0.001);
 
- const minZ = Math.floor(pz-halfD);
- const maxZ = Math.floor(pz+halfD);
+ const minZ=Math.floor(pz-hd);
+ const maxZ=Math.floor(pz+hd);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
@@ -157,16 +137,18 @@ function move(dx,dz){
  const steps=6;
 
  for(let i=0;i<steps;i++){
+
   let sx=dx/steps;
   let sz=dz/steps;
 
+  // X
   let nx=camera.position.x+sx;
-  let nz=camera.position.z+sz;
-
   if(!collide(nx,camera.position.y,camera.position.z)){
    camera.position.x=nx;
   }
 
+  // Z
+  let nz=camera.position.z+sz;
   if(!collide(camera.position.x,camera.position.y,nz)){
    camera.position.z=nz;
   }
@@ -177,19 +159,15 @@ function move(dx,dz){
 const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-document.getElementById("overlay").onclick=()=>{
- document.body.requestPointerLock();
-};
-
+overlay.onclick=()=>document.body.requestPointerLock();
 document.addEventListener("pointerlockchange",()=>{
- document.getElementById("overlay").style.display=
- document.pointerLockElement===document.body?"none":"flex";
+ overlay.style.display=document.pointerLockElement?"none":"flex";
 });
 
 // ================= INPUT =================
 const k={w:false,a:false,s:false,d:false};
 
-window.onkeydown=e=>{
+onkeydown=e=>{
  if(e.code==="KeyW")k.w=true;
  if(e.code==="KeyA")k.a=true;
  if(e.code==="KeyS")k.s=true;
@@ -201,37 +179,32 @@ window.onkeydown=e=>{
  }
 };
 
-window.onkeyup=e=>{
+onkeyup=e=>{
  if(e.code==="KeyW")k.w=false;
  if(e.code==="KeyA")k.a=false;
  if(e.code==="KeyS")k.s=false;
  if(e.code==="KeyD")k.d=false;
 };
 
-// ================= RAYCAST =================
+// ================= BLOCK INTERACTION =================
 const ray=new THREE.Raycaster();
 
-window.addEventListener("mousedown",e=>{
+addEventListener("mousedown",e=>{
  ray.setFromCamera({x:0,y:0},camera);
 
  const hits=ray.intersectObjects(meshes);
- if(!hits.length)return;
+ if(!hits.length) return;
 
  const hit=hits[0];
- const pos=hit.object.position;
+ const p=hit.object.position;
 
- const x=Math.floor(pos.x);
- const y=Math.floor(pos.y);
- const z=Math.floor(pos.z);
+ const x=Math.floor(p.x);
+ const y=Math.floor(p.y);
+ const z=Math.floor(p.z);
 
- // break
- if(e.button===0){
-  remove(x,y,z);
- }
+ if(e.button===0) remove(x,y,z);
 
- // place (face correct)
  if(e.button===2){
-
   let n=hit.face.normal.clone();
   n.transformDirection(hit.object.matrixWorld);
 
@@ -245,7 +218,49 @@ window.addEventListener("mousedown",e=>{
  }
 });
 
-window.addEventListener("contextmenu",e=>e.preventDefault());
+addEventListener("contextmenu",e=>e.preventDefault());
+
+// ================= MULTIPLAYER =================
+let socket=new WebSocket("ws://localhost:3000");
+let myId=null;
+const others={};
+
+function createPlayer(){
+ return new THREE.Mesh(
+  new THREE.BoxGeometry(0.98,2,0.98),
+  new THREE.MeshBasicMaterial({color:0xff0000})
+ );
+}
+
+socket.onmessage=e=>{
+ const data=JSON.parse(e.data);
+
+ if(data.type==="init") myId=data.id;
+
+ if(data.type==="players"){
+
+  for(const id in data.players){
+   if(id===myId) continue;
+
+   const p=data.players[id];
+
+   if(!others[id]){
+    const m=createPlayer();
+    scene.add(m);
+    others[id]=m;
+   }
+
+   others[id].position.set(p.x,p.y-1,p.z);
+  }
+
+  for(const id in others){
+   if(!data.players[id]){
+    scene.remove(others[id]);
+    delete others[id];
+   }
+  }
+ }
+};
 
 // ================= START =================
 camera.position.set(0,5,5);
@@ -273,31 +288,49 @@ function animate(){
 
  move(dx,dz);
 
- // gravity
+ // ===== FIXED GRAVITY =====
  velY+=gravity;
- camera.position.y+=velY;
+ let ny=camera.position.y+velY;
 
- const feet=camera.position.y-player.height;
-
- if(collide(camera.position.x,feet,camera.position.z)){
-  camera.position.y=Math.ceil(camera.position.y);
-  velY=0;
-  onGround=true;
+ if(velY<=0){
+  if(collide(camera.position.x,ny-player.height,camera.position.z)){
+   camera.position.y=Math.floor(camera.position.y);
+   velY=0;
+   onGround=true;
+  } else {
+   camera.position.y=ny;
+   onGround=false;
+  }
  } else {
-  onGround=false;
+  if(collide(camera.position.x,ny,camera.position.z)){
+   velY=0;
+  } else {
+   camera.position.y=ny;
+  }
+ }
+
+ // send position
+ if(socket.readyState===1&&myId){
+  socket.send(JSON.stringify({
+   type:"move",
+   pos:{
+    x:camera.position.x,
+    y:camera.position.y,
+    z:camera.position.z
+   }
+  }));
  }
 
  renderer.render(scene,camera);
 }
 animate();
 
-window.addEventListener("resize",()=>{
+onresize=()=>{
  camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();
  renderer.setSize(innerWidth,innerHeight);
-});
+};
 
 </script>
-
 </body>
 </html>
