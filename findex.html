@@ -2,10 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Face Placement Fix</title>
+<title>Voxel Engine + Crosshair</title>
 
 <style>
 body { margin:0; overflow:hidden; }
+
+/* OVERLAY */
 #overlay{
  position:absolute;
  inset:0;
@@ -17,11 +19,45 @@ body { margin:0; overflow:hidden; }
  font-size:20px;
  cursor:pointer;
 }
+
+/* CROSSHAIR */
+#crosshair{
+ position:fixed;
+ left:50%;
+ top:50%;
+ width:10px;
+ height:10px;
+ transform:translate(-50%,-50%);
+ pointer-events:none;
+}
+
+#crosshair:before,
+#crosshair:after{
+ content:"";
+ position:absolute;
+ background:white;
+}
+
+#crosshair:before{
+ width:10px;
+ height:2px;
+ top:4px;
+ left:0;
+}
+
+#crosshair:after{
+ width:2px;
+ height:10px;
+ left:4px;
+ top:0;
+}
 </style>
 </head>
 
 <body>
+
 <div id="overlay">CLICK TO START</div>
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
@@ -55,7 +91,7 @@ const mat = {
 const world = new Map();
 const meshes = [];
 
-const key = (x,y,z)=>`${x},${y},${z}`;
+const key=(x,y,z)=>`${x},${y},${z}`;
 
 function add(x,y,z,material){
  const m=new THREE.Mesh(geo,material);
@@ -194,14 +230,13 @@ window.addEventListener("mousedown",e=>{
  const y=Math.floor(pos.y);
  const z=Math.floor(pos.z);
 
- // LEFT CLICK = BREAK
+ // BREAK
  if(e.button===0){
   remove(x,y,z);
  }
 
- // RIGHT CLICK = PLACE ON FACE (FIXED)
+ // PLACE (FACE BASED FIX)
  if(e.button===2){
-
   const n=hit.face.normal;
 
   const px=x+n.x;
