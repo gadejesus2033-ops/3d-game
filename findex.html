@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine + Inventory</title>
+<title>Voxel Engine Working</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -11,7 +11,7 @@ body{margin:0;overflow:hidden;background:black;}
 #crosshair:before,#crosshair:after{content:"";position:absolute;background:white;}
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
-#hud{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);color:white;font-family:sans-serif;}
+#hud{position:fixed;bottom:10px;left:10px;color:white;font-family:sans-serif;}
 </style>
 </head>
 
@@ -34,7 +34,7 @@ const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff,0.6));
+scene.add(new THREE.AmbientLight(0xffffff,0.7));
 
 const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
@@ -44,7 +44,7 @@ controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-const keys={},inv={};
+const keys={},inventory={};
 let breaking=false;
 
 onkeydown=e=>keys[e.code]=true;
@@ -57,20 +57,20 @@ addEventListener("mouseup",e=>{
  if(e.button===0) breaking=false;
 });
 
-// ===== PLAYER =====
+// ===== CONSTANTS =====
 const HEIGHT=1.8,EYE=1.6,WIDTH=0.3;
 
 // ===== TEXTURES =====
 function tex(c){
- const c2=document.createElement("canvas");
- c2.width=8;c2.height=8;
- const ctx=c2.getContext("2d");
+ const cv=document.createElement("canvas");
+ cv.width=8;cv.height=8;
+ const ctx=cv.getContext("2d");
  for(let x=0;x<8;x++)for(let y=0;y<8;y++){
   let s=c+Math.random()*20;
   ctx.fillStyle=`rgb(${s},${s},${s})`;
   ctx.fillRect(x,y,1,1);
  }
- const t=new THREE.CanvasTexture(c2);
+ const t=new THREE.CanvasTexture(cv);
  t.magFilter=t.minFilter=THREE.NearestFilter;
  return t;
 }
@@ -91,7 +91,7 @@ const blocks=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
 
 function addItem(type){
- inv[type]=(inv[type]||0)+1;
+ inventory[type]=(inventory[type]||0)+1;
 }
 
 function place(x,y,z,type){
@@ -106,22 +106,21 @@ function place(x,y,z,type){
  world.set(k,type);
 }
 
-// ===== GENERATION =====
-const SIZE=200;
+// ===== GENERATE SMALLER (WORKING) WORLD =====
+const SIZE=80;
 
 for(let x=-SIZE;x<SIZE;x++){
  for(let z=-SIZE;z<SIZE;z++){
 
   let surface=5;
 
-  // grass + dirt layers
+  // 4 layers (grass/dirt)
   for(let y=surface;y>surface-4;y--){
    place(x,y,z,y===surface?"grass":"dirt");
   }
 
-  // stone layers with ores
+  // 38 layers stone + ores
   for(let y=surface-4;y>-38;y--){
-
    let type="stone";
 
    if(Math.random()<0.05) type="coal";
@@ -146,6 +145,12 @@ let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
 
 camera.position.set(0,20,0);
+
+onkeydown=e=>{
+ keys[e.code]=true;
+ if(e.code==="Space"&&onGround){vy=jump;onGround=false;}
+};
+onkeyup=e=>keys[e.code]=false;
 
 // ===== RAY =====
 const ray=new THREE.Raycaster();
@@ -186,25 +191,20 @@ function animate(){
   } else camera.position.y=ny;
  } else camera.position.y=ny;
 
- // ===== RAY =====
+ // break blocks
  ray.setFromCamera({x:0,y:0},camera);
  const hits=ray.intersectObjects([...blocks.values()]);
 
  if(hits.length){
-  const h=hits[0];
-  const pos=h.object.position.clone();
-  target=pos;
+  const pos=hits[0].object.position;
 
   if(breaking){
    breakTimer++;
    if(breakTimer>8){
-
     const k=key(pos.x,pos.y,pos.z);
 
     if(blocks.has(k)){
-     const type=world.get(k);
-
-     addItem(type);
+     addItem(world.get(k));
 
      scene.remove(blocks.get(k));
      blocks.delete(k);
@@ -218,10 +218,11 @@ function animate(){
  } else breakTimer=0;
 
  // HUD
- hud.innerText=JSON.stringify(inv,null,1);
+ hud.innerText="Inventory:\n"+JSON.stringify(inventory,null,1);
 
  renderer.render(scene,camera);
 }
+
 animate();
 
 </script>
