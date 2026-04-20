@@ -2,137 +2,78 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Stable Final</title>
+<title>Voxel Engine - Clean Minecraft Movement</title>
 
 <style>
-body{margin:0;overflow:hidden;}
-
+body{margin:0;overflow:hidden;background:#000;}
 #overlay{
- position:absolute;inset:0;background:#000;color:#fff;
- display:flex;align-items:center;justify-content:center;
- cursor:pointer;
+ position:absolute;inset:0;display:flex;
+ align-items:center;justify-content:center;
+ color:white;background:#000;cursor:pointer;
 }
-
-#crosshair{
- position:fixed;left:50%;top:50%;
- width:10px;height:10px;transform:translate(-50%,-50%);
-}
-#crosshair:before,#crosshair:after{
- content:"";position:absolute;background:white;
-}
-#crosshair:before{width:10px;height:2px;top:4px;}
-#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
-<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== SCENE =====
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x87ceeb);
+// ===== BASIC SETUP =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
 
-scene.add(new THREE.AmbientLight(0xffffff,0.6));
-const light=new THREE.DirectionalLight(0xffffff,1);
-light.position.set(20,30,10);
-scene.add(light);
-
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer=new THREE.WebGLRenderer();
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ===== PLAYER =====
-const player={width:0.6,depth:0.6,height:1.8};
-let velY=0,onGround=false;
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const light=new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
 
-const gravity=-0.015;
-const jump=0.22;
+// ===== PLAYER =====
+const player = {
+ width:0.6,
+ height:1.8,
+ depth:0.6
+};
+
+let velY = 0;
+let onGround = false;
+
+const gravity = -0.015;
+const jump = 0.25;
 
 // ===== WORLD =====
-const CHUNK=16;
-const RENDER_DIST=3;
+const world = new Map();
+const key = (x,y,z)=>`${x},${y},${z}`;
 
-const chunks=new Map();
-const chunkData=new Map();
-const world=new Map();
-
-const key=(x,y,z)=>`${x},${y},${z}`;
-const ckey=(x,z)=>`${x},${z}`;
-
-// ===== BLOCK =====
-const BLOCK_GEO=new THREE.BoxGeometry(1,1,1);
-const BLOCK_MAT=new THREE.MeshLambertMaterial({color:0x3cb043});
-
-// ===== NOISE =====
-function noise(x,z){
- return (Math.sin(x*0.05)+Math.cos(z*0.05))*6;
-}
-
-// ===== SOLID CHECK =====
-function solid(x,y,z){
- return world.has(`${x},${y},${z}`);
-}
-
-// ===== CREATE CHUNK =====
-function createChunk(cx,cz){
-
- const inst=new THREE.InstancedMesh(BLOCK_GEO,BLOCK_MAT,6000);
- const dummy=new THREE.Object3D();
-
- let data={};
- let i=0;
-
- for(let x=0;x<CHUNK;x++){
-  for(let z=0;z<CHUNK;z++){
-
-   let wx=cx*CHUNK+x;
-   let wz=cz*CHUNK+z;
-   let h=Math.floor(noise(wx,wz));
-
-   for(let y=-6;y<=h;y++){
-    const k=key(wx,y,wz);
-    data[k]=1;
-    world.set(k,1);
-
-    dummy.position.set(wx,y,wz);
-    dummy.updateMatrix();
-    inst.setMatrixAt(i++,dummy.matrix);
-   }
-  }
- }
-
- inst.count=i;
- inst.instanceMatrix.needsUpdate=true;
-
- scene.add(inst);
- chunks.set(ckey(cx,cz),inst);
- chunkData.set(ckey(cx,cz),data);
-}
-
-// ===== LOAD =====
-function updateChunks(){
-
- const cx=Math.floor(camera.position.x/CHUNK);
- const cz=Math.floor(camera.position.z/CHUNK);
-
- for(let x=-RENDER_DIST;x<=RENDER_DIST;x++){
-  for(let z=-RENDER_DIST;z<=RENDER_DIST;z++){
-   const id=ckey(cx+x,cz+z);
-   if(!chunks.has(id)){
-    createChunk(cx+x,cz+z);
-   }
+// simple flat world
+for(let x=-20;x<20;x++){
+ for(let z=-20;z<20;z++){
+  for(let y=-3;y<0;y++){
+   world.set(key(x,y,z),1);
   }
  }
 }
 
-// ===== COLLISION (FIXED) =====
+// ===== BLOCK MESH =====
+const geo = new THREE.BoxGeometry(1,1,1);
+const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
+
+for(let k of world.keys()){
+ const [x,y,z]=k.split(",").map(Number);
+ const m=new THREE.Mesh(geo,mat);
+ m.position.set(x,y,z);
+ scene.add(m);
+}
+
+// ===== COLLISION =====
 function collide(px,py,pz){
 
  const hw=player.width/2;
@@ -140,34 +81,42 @@ function collide(px,py,pz){
 
  const minX=Math.floor(px-hw);
  const maxX=Math.floor(px+hw);
-
- const minY=Math.floor(py-player.height);
- const maxY=Math.floor(py-0.1); // IGNORE feet touching ground
-
+ const minY=Math.floor(py-player.height+0.001);
+ const maxY=Math.floor(py-0.001);
  const minZ=Math.floor(pz-hd);
  const maxZ=Math.floor(pz+hd);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
    for(let z=minZ;z<=maxZ;z++){
-    if(solid(x,y,z)) return true;
+    if(world.has(key(x,y,z))) return true;
    }
   }
  }
  return false;
 }
 
-// ===== MOVE =====
+// ===== MOVEMENT =====
 function move(dx,dz){
 
- let nx=camera.position.x+dx;
- if(!collide(nx,camera.position.y,camera.position.z)){
-  camera.position.x=nx;
- }
+ const steps=4;
 
- let nz=camera.position.z+dz;
- if(!collide(camera.position.x,camera.position.y,nz)){
-  camera.position.z=nz;
+ for(let i=0;i<steps;i++){
+
+  let sx=dx/steps;
+  let sz=dz/steps;
+
+  // X
+  let nx=camera.position.x+sx;
+  if(!collide(nx,camera.position.y,camera.position.z)){
+   camera.position.x=nx;
+  }
+
+  // Z
+  let nz=camera.position.z+sz;
+  if(!collide(camera.position.x,camera.position.y,nz)){
+   camera.position.z=nz;
+  }
  }
 }
 
@@ -176,22 +125,31 @@ function applyGravity(){
 
  velY+=gravity;
 
- let ny=camera.position.y+velY;
+ let steps=Math.ceil(Math.abs(velY)/0.1);
+ let stepY=velY/steps;
 
- if(velY<=0){
-  if(collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y=Math.floor(camera.position.y);
-   velY=0;
-   onGround=true;
+ onGround=false;
+
+ for(let i=0;i<steps;i++){
+
+  let ny=camera.position.y+stepY;
+
+  if(stepY<=0){
+   if(collide(camera.position.x,ny,camera.position.z)){
+    camera.position.y=Math.floor(camera.position.y);
+    velY=0;
+    onGround=true;
+    break;
+   } else {
+    camera.position.y=ny;
+   }
   } else {
-   camera.position.y=ny;
-   onGround=false;
-  }
- } else {
-  if(collide(camera.position.x,ny,camera.position.z)){
-   velY=0;
-  } else {
-   camera.position.y=ny;
+   if(collide(camera.position.x,ny,camera.position.z)){
+    velY=0;
+    break;
+   } else {
+    camera.position.y=ny;
+   }
   }
  }
 }
@@ -202,89 +160,33 @@ scene.add(controls.getObject());
 
 overlay.onclick=()=>document.body.requestPointerLock();
 
-document.addEventListener("pointerlockchange",()=>{
- overlay.style.display=document.pointerLockElement?"none":"flex";
-});
-
 // ===== INPUT =====
-const k={w:false,a:false,s:false,d:false};
+const k={w:0,a:0,s:0,d:0};
 
 onkeydown=e=>{
- if(e.code==="KeyW")k.w=true;
- if(e.code==="KeyA")k.a=true;
- if(e.code==="KeyS")k.s=true;
- if(e.code==="KeyD")k.d=true;
+ if(e.code==="KeyW")k.w=1;
+ if(e.code==="KeyS")k.s=1;
+ if(e.code==="KeyA")k.a=1;
+ if(e.code==="KeyD")k.d=1;
 
- if(e.code==="Space"&&onGround){
+ if(e.code==="Space" && onGround){
   velY=jump;
  }
 };
 
 onkeyup=e=>{
- if(e.code==="KeyW")k.w=false;
- if(e.code==="KeyA")k.a=false;
- if(e.code==="KeyS")k.s=false;
- if(e.code==="KeyD")k.d=false;
+ if(e.code==="KeyW")k.w=0;
+ if(e.code==="KeyS")k.s=0;
+ if(e.code==="KeyA")k.a=0;
+ if(e.code==="KeyD")k.d=0;
 };
 
-// ===== BLOCK EDIT =====
-const ray=new THREE.Raycaster();
-
-addEventListener("mousedown",e=>{
-
- ray.setFromCamera({x:0,y:0},camera);
- const hits=ray.intersectObjects([...chunks.values()]);
- if(!hits.length) return;
-
- const hit=hits[0];
- const p=hit.point.clone().floor();
- const n=hit.face.normal.clone();
-
- const bx=p.x,by=p.y,bz=p.z;
-
- const cx=Math.floor(bx/CHUNK);
- const cz=Math.floor(bz/CHUNK);
-
- const data=chunkData.get(ckey(cx,cz));
-
- // BREAK
- if(e.button===0){
-  const k=key(bx,by,bz);
-  if(data && data[k]){
-   delete data[k];
-   world.delete(k);
-   location.reload(); // quick rebuild
-  }
- }
-
- // PLACE
- if(e.button===2){
-
-  const px=bx+n.x;
-  const py=by+n.y;
-  const pz=bz+n.z;
-
-  // don't place inside player
-  if(collide(px+0.5,py+1,pz+0.5)) return;
-
-  const k=key(px,py,pz);
-  world.set(k,1);
-
-  location.reload(); // quick rebuild
- }
-
-});
-
-addEventListener("contextmenu",e=>e.preventDefault());
-
 // ===== START =====
-camera.position.set(0,10,5);
+camera.position.set(0,3,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
-
- updateChunks();
 
  const speed=0.12;
 
