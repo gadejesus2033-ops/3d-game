@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini Minecraft Fixed</title>
+<title>Fixed Minecraft Collision</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -75,7 +75,6 @@ function add(x,y,z,mat){
 }
 
 // ================= WORLD =================
-// ground
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
   add(x,-1,z,grass);
@@ -164,15 +163,24 @@ window.onkeyup=e=>{
  if(e.code==="ArrowRight")keys.right=false;
 };
 
-// ================= COLLISION =================
-// better player box check (fixes mountain clipping)
+// ================= COLLISION (FIXED) =================
 function blocked(x,y,z){
  const px=Math.round(x);
  const pz=Math.round(z);
 
- for(let h=0;h<2;h++){
-  if(solid.has(key(px,Math.floor(y+h),pz))){
-   return true;
+ const size=0.3;
+
+ for(let dx=-size;dx<=size;dx+=size){
+  for(let dz=-size;dz<=size;dz+=size){
+   for(let h=0;h<2;h++){
+    if(solid.has(key(
+     Math.round(px+dx),
+     Math.floor(y+h),
+     Math.round(pz+dz)
+    ))){
+     return true;
+    }
+   }
   }
  }
  return false;
@@ -201,13 +209,13 @@ function animate(){
  if(keys.left){mx-=right.x*speed;mz-=right.z*speed;}
  if(keys.right){mx+=right.x*speed;mz+=right.z*speed;}
 
-// X collision
+// X move
 let nx=camera.position.x+mx;
 if(!blocked(nx,camera.position.y,camera.position.z)){
  camera.position.x=nx;
 }
 
-// Z collision
+// Z move
 let nz=camera.position.z+mz;
 if(!blocked(camera.position.x,camera.position.y,nz)){
  camera.position.z=nz;
@@ -217,7 +225,6 @@ if(!blocked(camera.position.x,camera.position.y,nz)){
 velocityY+=gravity;
 camera.position.y+=velocityY;
 
-// ground check
 if(camera.position.y<=2){
  camera.position.y=2;
  velocityY=0;
