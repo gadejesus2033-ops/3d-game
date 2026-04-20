@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine Working</title>
+<title>Voxel Engine 100x100</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -86,6 +86,9 @@ const mats={
 const geo=new THREE.BoxGeometry(1,1,1);
 
 // ===== WORLD =====
+const SIZE=100;
+const HALF=SIZE/2;
+
 const world=new Map();
 const blocks=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
@@ -106,15 +109,13 @@ function place(x,y,z,type){
  world.set(k,type);
 }
 
-// ===== GENERATE SMALLER (WORKING) WORLD =====
-const SIZE=80;
-
-for(let x=-SIZE;x<SIZE;x++){
- for(let z=-SIZE;z<SIZE;z++){
+// ===== GENERATE =====
+for(let x=-HALF;x<HALF;x++){
+ for(let z=-HALF;z<HALF;z++){
 
   let surface=5;
 
-  // 4 layers (grass/dirt)
+  // 4 layers grass/dirt
   for(let y=surface;y>surface-4;y--){
    place(x,y,z,y===surface?"grass":"dirt");
   }
@@ -156,7 +157,7 @@ onkeyup=e=>keys[e.code]=false;
 const ray=new THREE.Raycaster();
 ray.far=6;
 
-let target=null,breakTimer=0;
+let breakTimer=0;
 
 // ===== LOOP =====
 function animate(){
@@ -191,7 +192,7 @@ function animate(){
   } else camera.position.y=ny;
  } else camera.position.y=ny;
 
- // break blocks
+ // ===== BREAK =====
  ray.setFromCamera({x:0,y:0},camera);
  const hits=ray.intersectObjects([...blocks.values()]);
 
@@ -201,6 +202,7 @@ function animate(){
   if(breaking){
    breakTimer++;
    if(breakTimer>8){
+
     const k=key(pos.x,pos.y,pos.z);
 
     if(blocks.has(k)){
