@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft World</title>
+<title>Minecraft Jump + Terrain</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -49,12 +49,10 @@ body{margin:0;overflow:hidden;background:black;}
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(
-75, innerWidth/innerHeight, 0.1, 1000
-);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
@@ -66,17 +64,7 @@ scene.add(new THREE.AmbientLight(0xffffff));
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
-document.getElementById("overlay").onclick = () => {
- controls.lock();
-};
-
-controls.addEventListener("lock",()=>{
- document.getElementById("overlay").style.display="none";
-});
-
-controls.addEventListener("unlock",()=>{
- document.getElementById("overlay").style.display="flex";
-});
+document.getElementById("overlay").onclick = () => controls.lock();
 
 // =====================
 // INPUT
@@ -99,16 +87,15 @@ function key(x,y,z){
 
 function height(x,z){
  return Math.floor(
-  Math.sin(x * 0.12) * 4 +
-  Math.cos(z * 0.12) * 4 +
-  Math.sin((x+z) * 0.05) * 2
+  Math.sin(x*0.12)*4 +
+  Math.cos(z*0.12)*4 +
+  Math.sin((x+z)*0.05)*2
  );
 }
 
 const geo = new THREE.BoxGeometry(1,1,1);
 const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
 
-// terrain
 for(let x=-60;x<60;x++){
  for(let z=-60;z<60;z++){
 
@@ -151,13 +138,31 @@ function collide(px,py,pz){
 }
 
 // =====================
-// START POSITION
+// PHYSICS (NEW)
 // =====================
 
-camera.position.set(0,8,10);
+let velY = 0;
+let onGround = false;
+
+const gravity = -0.02;
+const jumpPower = 0.35;
+
+// start
+camera.position.set(0,10,10);
 
 // =====================
-// MOVEMENT LOOP
+// INPUT JUMP
+// =====================
+
+document.addEventListener("keydown",e=>{
+ if(e.code === "Space" && onGround){
+  velY = jumpPower;
+  onGround = false;
+ }
+});
+
+// =====================
+// LOOP
 // =====================
 
 function animate(){
@@ -165,6 +170,7 @@ function animate(){
 
  const speed = 0.15;
 
+ // direction
  const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
  forward.y = 0;
@@ -173,6 +179,7 @@ function animate(){
  const right = new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
+ // movement XZ
  let nx = camera.position.x;
  let nz = camera.position.z;
 
@@ -187,6 +194,31 @@ function animate(){
 
  if(!collide(camera.position.x,camera.position.y,nz)){
   camera.position.z = nz;
+ }
+
+ // =====================
+ // GRAVITY + JUMP
+ // =====================
+
+ velY += gravity;
+
+ let ny = camera.position.y + velY;
+
+ if(velY <= 0){
+  if(collide(camera.position.x,ny,camera.position.z)){
+   camera.position.y = Math.floor(camera.position.y);
+   velY = 0;
+   onGround = true;
+  } else {
+   camera.position.y = ny;
+   onGround = false;
+  }
+ } else {
+  if(!collide(camera.position.x,ny,camera.position.z)){
+   camera.position.y = ny;
+  } else {
+   velY = 0;
+  }
  }
 
  renderer.render(scene,camera);
