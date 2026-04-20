@@ -2,12 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine + Crosshair</title>
+<title>Voxel Engine - Correct Collision</title>
 
 <style>
 body { margin:0; overflow:hidden; }
 
-/* OVERLAY */
 #overlay{
  position:absolute;
  inset:0;
@@ -20,7 +19,6 @@ body { margin:0; overflow:hidden; }
  cursor:pointer;
 }
 
-/* CROSSHAIR */
 #crosshair{
  position:fixed;
  left:50%;
@@ -91,7 +89,7 @@ const mat = {
 const world = new Map();
 const meshes = [];
 
-const key=(x,y,z)=>`${x},${y},${z}`;
+const key = (x,y,z)=>`${x},${y},${z}`;
 
 function add(x,y,z,material){
  const m=new THREE.Mesh(geo,material);
@@ -131,29 +129,33 @@ let onGround=false;
 const gravity=-0.015;
 const jumpPower=0.22;
 
-// ================= COLLISION =================
-function solid(x,y,z){
- return world.has(`${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`);
+// ================= VOXEL FIX =================
+function voxel(x){
+ return Math.floor(x);
 }
 
+// ================= COLLISION (FIXED) =================
 function collide(px,py,pz){
- const w=player.width/2;
- const d=player.depth/2;
 
- const minX=px-w;
- const maxX=px+w;
- const minY=py;
- const maxY=py+player.height;
- const minZ=pz-d;
- const maxZ=pz+d;
+ const minX = voxel(px - player.width/2);
+ const maxX = voxel(px + player.width/2);
 
- for(let x=Math.floor(minX);x<=Math.floor(maxX);x++){
-  for(let y=Math.floor(minY);y<=Math.floor(maxY);y++){
-   for(let z=Math.floor(minZ);z<=Math.floor(maxZ);z++){
-    if(solid(x,y,z)) return true;
+ const minY = voxel(py);
+ const maxY = voxel(py + player.height);
+
+ const minZ = voxel(pz - player.depth/2);
+ const maxZ = voxel(pz + player.depth/2);
+
+ for(let x=minX;x<=maxX;x++){
+  for(let y=minY;y<=maxY;y++){
+   for(let z=minZ;z<=maxZ;z++){
+    if(world.has(`${x},${y},${z}`)){
+     return true;
+    }
    }
   }
  }
+
  return false;
 }
 
@@ -224,18 +226,18 @@ window.addEventListener("mousedown",e=>{
 
  const hit=hits[0];
 
- const pos=hit.object.position;
+ const p=hit.object.position;
 
- const x=Math.floor(pos.x);
- const y=Math.floor(pos.y);
- const z=Math.floor(pos.z);
+ const x=Math.floor(p.x);
+ const y=Math.floor(p.y);
+ const z=Math.floor(p.z);
 
- // BREAK
+ // break
  if(e.button===0){
   remove(x,y,z);
  }
 
- // PLACE (FACE BASED FIX)
+ // place on face (FIXED)
  if(e.button===2){
   const n=hit.face.normal;
 
