@@ -2,12 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Move Test</title>
+<title>Movement Works</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
- position:absolute;inset:0;display:flex;
- align-items:center;justify-content:center;
+ position:absolute;inset:0;
+ display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;cursor:pointer;
 }
 </style>
@@ -21,67 +21,71 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// scene
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x87ceeb);
+// ===== SETUP =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
 
-// camera
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer=new THREE.WebGLRenderer();
-renderer.setSize(innerWidth,innerHeight);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // light
 scene.add(new THREE.AmbientLight(0xffffff));
 
-// controls
-const controls=new THREE.PointerLockControls(camera,document.body);
-scene.add(controls.getObject());
-
-const overlay=document.getElementById("overlay");
-
-overlay.onclick=()=>controls.lock();
-
-controls.addEventListener("lock",()=>overlay.style.display="none");
-controls.addEventListener("unlock",()=>overlay.style.display="flex");
-
-// ground (just a floor)
-const floor=new THREE.Mesh(
+// floor
+const floor = new THREE.Mesh(
  new THREE.BoxGeometry(50,1,50),
  new THREE.MeshBasicMaterial({color:0x00ff00})
 );
-floor.position.y=-1;
+floor.position.y = -1;
 scene.add(floor);
 
-// movement
-const keys={};
+// ===== CONTROLS =====
+const controls = new THREE.PointerLockControls(camera, document.body);
+scene.add(controls.getObject());
 
-document.addEventListener("keydown",e=>keys[e.code]=true);
-document.addEventListener("keyup",e=>keys[e.code]=false);
+const overlay = document.getElementById("overlay");
+
+overlay.onclick = () => controls.lock();
+
+controls.addEventListener("lock", () => {
+ overlay.style.display = "none";
+});
+
+controls.addEventListener("unlock", () => {
+ overlay.style.display = "flex";
+});
+
+// ===== INPUT =====
+const keys = {};
+
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
 
 // start position
 camera.position.set(0,2,5);
 
-// loop
+// ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed=0.1;
+ const speed = 0.12;
 
- const dir=new THREE.Vector3();
+ const dir = new THREE.Vector3();
  camera.getWorldDirection(dir);
- dir.y=0;
+ dir.y = 0;
  dir.normalize();
 
- const right=new THREE.Vector3();
- right.crossVectors(dir,new THREE.Vector3(0,1,0)).normalize();
+ const right = new THREE.Vector3();
+ right.crossVectors(dir, new THREE.Vector3(0,1,0)).normalize();
 
- if(keys["KeyW"]) camera.position.addScaledVector(dir,speed);
- if(keys["KeyS"]) camera.position.addScaledVector(dir,-speed);
- if(keys["KeyA"]) camera.position.addScaledVector(right,-speed);
- if(keys["KeyD"]) camera.position.addScaledVector(right,speed);
+ if(keys["KeyW"]) camera.position.addScaledVector(dir, speed);
+ if(keys["KeyS"]) camera.position.addScaledVector(dir, -speed);
+ if(keys["KeyA"]) camera.position.addScaledVector(right, -speed);
+ if(keys["KeyD"]) camera.position.addScaledVector(right, speed);
 
- renderer.render(scene,camera);
+ renderer.render(scene, camera);
 }
 
 animate();
