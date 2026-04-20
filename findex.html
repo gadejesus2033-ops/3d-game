@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Fixed Minecraft Collision</title>
+<title>Voxel Engine - Entity System</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -13,6 +13,7 @@ body { margin:0; overflow:hidden; }
  display:flex;
  align-items:center;
  justify-content:center;
+ font-size:20px;
 }
 </style>
 </head>
@@ -26,9 +27,9 @@ body { margin:0; overflow:hidden; }
 <script>
 // ================= TEXTURES =================
 function tex(c1,c2){
- const canvas=document.createElement("canvas");
- canvas.width=16;canvas.height=16;
- const ctx=canvas.getContext("2d");
+ const c=document.createElement("canvas");
+ c.width=16;c.height=16;
+ const ctx=c.getContext("2d");
 
  for(let x=0;x<16;x++){
   for(let y=0;y<16;y++){
@@ -37,7 +38,7 @@ function tex(c1,c2){
   }
  }
 
- const t=new THREE.CanvasTexture(canvas);
+ const t=new THREE.CanvasTexture(c);
  t.magFilter=THREE.NearestFilter;
  return t;
 }
@@ -61,36 +62,69 @@ const light=new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
-// ================= BLOCK SYSTEM =================
+// ================= WORLD =================
+const world=new Map();
 const geo=new THREE.BoxGeometry(1,1,1);
-const solid=new Set();
 
-function key(x,y,z){return `${x},${y},${z}`;}
-
-function add(x,y,z,mat){
- const m=new THREE.Mesh(geo,mat);
- m.position.set(x,y,z);
- scene.add(m);
- solid.add(key(x,y,z));
+function key(x,y,z){
+ return `${x},${y},${z}`;
 }
 
-// ================= WORLD =================
+const BLOCK={
+ GRASS:"grass",
+ DIRT:"dirt",
+ STONE:"stone",
+ WOOD:"wood",
+ LEAVES:"leaves"
+};
+
+// ================= BLOCK ENTITY =================
+class BlockEntity{
+ constructor(x,y,z,type,mesh,solid=true){
+  this.x=x;
+  this.y=y;
+  this.z=z;
+  this.type=type;
+  this.mesh=mesh;
+  this.solid=solid;
+  this.health=1;
+ }
+}
+
+function addBlock(x,y,z,type,mat){
+ const mesh=new THREE.Mesh(geo,mat);
+ mesh.position.set(x,y,z);
+ scene.add(mesh);
+
+ const entity=new BlockEntity(x,y,z,type,mesh,true);
+ world.set(key(x,y,z),entity);
+}
+
+function getBlock(x,y,z){
+ return world.get(key(Math.round(x),Math.floor(y),Math.round(z)));
+}
+
+// ================= WORLD GENERATION =================
+
+// ground
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
-  add(x,-1,z,grass);
-  add(x,-2,z,dirt);
+  addBlock(x,-1,z,BLOCK.GRASS,grass);
+  addBlock(x,-2,z,BLOCK.DIRT,dirt);
  }
 }
 
 // trees
 function tree(x,z){
- for(let i=0;i<4;i++) add(x,i,z,wood);
+ for(let i=0;i<4;i++){
+  addBlock(x,i,z,BLOCK.WOOD,wood);
+ }
 
  for(let lx=-2;lx<=2;lx++){
   for(let lz=-2;lz<=2;lz++){
    for(let ly=3;ly<=5;ly++){
     if(Math.abs(lx)+Math.abs(lz)<4){
-     add(x+lx,ly,z+lz,leaves);
+     addBlock(x+lx,ly,z+lz,BLOCK.LEAVES,leaves);
     }
    }
   }
@@ -111,7 +145,7 @@ function mountain(cx,cz){
 
    if(h>0){
     for(let y=0;y<h;y++){
-     add(cx+x,y,cz+z,stone);
+     addBlock(cx+x,y,cz+z,BLOCK.STONE,stone);
     }
    }
   }
@@ -163,23 +197,16 @@ window.onkeyup=e=>{
  if(e.code==="ArrowRight")keys.right=false;
 };
 
-// ================= COLLISION (FIXED) =================
+// ================= COLLISION =================
 function blocked(x,y,z){
  const px=Math.round(x);
  const pz=Math.round(z);
 
- const size=0.3;
-
- for(let dx=-size;dx<=size;dx+=size){
-  for(let dz=-size;dz<=size;dz+=size){
+ for(let dx=-0.3;dx<=0.3;dx+=0.3){
+  for(let dz=-0.3;dz<=0.3;dz+=0.3){
    for(let h=0;h<2;h++){
-    if(solid.has(key(
-     Math.round(px+dx),
-     Math.floor(y+h),
-     Math.round(pz+dz)
-    ))){
-     return true;
-    }
+    const b=getBlock(px+dx,y+h,pz+dz);
+    if(b && b.solid) return true;
    }
   }
  }
@@ -209,19 +236,19 @@ function animate(){
  if(keys.left){mx-=right.x*speed;mz-=right.z*speed;}
  if(keys.right){mx+=right.x*speed;mz+=right.z*speed;}
 
-// X move
+// X movement
 let nx=camera.position.x+mx;
 if(!blocked(nx,camera.position.y,camera.position.z)){
  camera.position.x=nx;
 }
 
-// Z move
+// Z movement
 let nz=camera.position.z+mz;
 if(!blocked(camera.position.x,camera.position.y,nz)){
  camera.position.z=nz;
 }
 
-// gravity
+// gravity + jump
 velocityY+=gravity;
 camera.position.y+=velocityY;
 
