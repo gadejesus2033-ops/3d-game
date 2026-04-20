@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Fixed Movement + Solid Blocks</title>
+<title>Voxel Engine - Stable Final</title>
 
 <style>
 body{margin:0;overflow:hidden;}
@@ -48,10 +48,6 @@ const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ===== BLOCKS =====
-const BLOCK_GEO=new THREE.BoxGeometry(1,1,1);
-const BLOCK_MAT=new THREE.MeshLambertMaterial({color:0x3cb043});
-
 // ===== PLAYER =====
 const player={width:0.6,depth:0.6,height:1.8};
 let velY=0,onGround=false;
@@ -70,21 +66,18 @@ const world=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
 const ckey=(x,z)=>`${x},${z}`;
 
+// ===== BLOCK =====
+const BLOCK_GEO=new THREE.BoxGeometry(1,1,1);
+const BLOCK_MAT=new THREE.MeshLambertMaterial({color:0x3cb043});
+
 // ===== NOISE =====
 function noise(x,z){
  return (Math.sin(x*0.05)+Math.cos(z*0.05))*6;
 }
 
-// ===== EXPOSED =====
-function isExposed(x,y,z,data){
- return !(
-  data[key(x+1,y,z)] &&
-  data[key(x-1,y,z)] &&
-  data[key(x,y+1,z)] &&
-  data[key(x,y-1,z)] &&
-  data[key(x,y,z+1)] &&
-  data[key(x,y,z-1)]
- );
+// ===== SOLID CHECK =====
+function solid(x,y,z){
+ return world.has(`${x},${y},${z}`);
 }
 
 // ===== CREATE CHUNK =====
@@ -107,16 +100,11 @@ function createChunk(cx,cz){
     const k=key(wx,y,wz);
     data[k]=1;
     world.set(k,1);
-   }
-  }
- }
 
- for(const k in data){
-  const [x,y,z]=k.split(",").map(Number);
-  if(isExposed(x,y,z,data)){
-   dummy.position.set(x,y,z);
-   dummy.updateMatrix();
-   inst.setMatrixAt(i++,dummy.matrix);
+    dummy.position.set(wx,y,wz);
+    dummy.updateMatrix();
+    inst.setMatrixAt(i++,dummy.matrix);
+   }
   }
  }
 
@@ -128,39 +116,9 @@ function createChunk(cx,cz){
  chunkData.set(ckey(cx,cz),data);
 }
 
-// ===== REBUILD =====
-function rebuildChunk(cx,cz){
-
- const id=ckey(cx,cz);
- const old=chunks.get(id);
- if(old) scene.remove(old);
-
- const data=chunkData.get(id);
- if(!data) return;
-
- const inst=new THREE.InstancedMesh(BLOCK_GEO,BLOCK_MAT,6000);
- const dummy=new THREE.Object3D();
-
- let i=0;
-
- for(const k in data){
-  const [x,y,z]=k.split(",").map(Number);
-  if(isExposed(x,y,z,data)){
-   dummy.position.set(x,y,z);
-   dummy.updateMatrix();
-   inst.setMatrixAt(i++,dummy.matrix);
-  }
- }
-
- inst.count=i;
- inst.instanceMatrix.needsUpdate=true;
-
- scene.add(inst);
- chunks.set(id,inst);
-}
-
-// ===== LOAD / UNLOAD =====
+// ===== LOAD =====
 function updateChunks(){
+
  const cx=Math.floor(camera.position.x/CHUNK);
  const cz=Math.floor(camera.position.z/CHUNK);
 
@@ -174,37 +132,25 @@ function updateChunks(){
  }
 }
 
-function unloadChunks(){
- const cx=Math.floor(camera.position.x/CHUNK);
- const cz=Math.floor(camera.position.z/CHUNK);
-
- for(const id of chunks.keys()){
-  const [x,z]=id.split(",").map(Number);
-  if(Math.abs(x-cx)>RENDER_DIST+1 || Math.abs(z-cz)>RENDER_DIST+1){
-   scene.remove(chunks.get(id));
-   chunks.delete(id);
-   chunkData.delete(id);
-  }
- }
-}
-
-// ===== COLLISION =====
+// ===== COLLISION (FIXED) =====
 function collide(px,py,pz){
 
- const hw = player.width/2;
- const hd = player.depth/2;
+ const hw=player.width/2;
+ const hd=player.depth/2;
 
- const minX = Math.floor(px - hw);
- const maxX = Math.floor(px + hw);
- const minY = Math.floor(py - player.height + 0.01);
- const maxY = Math.floor(py - 0.01);
- const minZ = Math.floor(pz - hd);
- const maxZ = Math.floor(pz + hd);
+ const minX=Math.floor(px-hw);
+ const maxX=Math.floor(px+hw);
+
+ const minY=Math.floor(py-player.height);
+ const maxY=Math.floor(py-0.1); // IGNORE feet touching ground
+
+ const minZ=Math.floor(pz-hd);
+ const maxZ=Math.floor(pz+hd);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
    for(let z=minZ;z<=maxZ;z++){
-    if(world.has(`${x},${y},${z}`)) return true;
+    if(solid(x,y,z)) return true;
    }
   }
  }
@@ -214,55 +160,38 @@ function collide(px,py,pz){
 // ===== MOVE =====
 function move(dx,dz){
 
- const steps = 4;
+ let nx=camera.position.x+dx;
+ if(!collide(nx,camera.position.y,camera.position.z)){
+  camera.position.x=nx;
+ }
 
- for(let i=0;i<steps;i++){
-
-  let sx = dx/steps;
-  let sz = dz/steps;
-
-  let nx = camera.position.x + sx;
-  if(!collide(nx, camera.position.y, camera.position.z)){
-   camera.position.x = nx;
-  }
-
-  let nz = camera.position.z + sz;
-  if(!collide(camera.position.x, camera.position.y, nz)){
-   camera.position.z = nz;
-  }
+ let nz=camera.position.z+dz;
+ if(!collide(camera.position.x,camera.position.y,nz)){
+  camera.position.z=nz;
  }
 }
 
 // ===== GRAVITY =====
 function applyGravity(){
 
- velY += gravity;
+ velY+=gravity;
 
- let steps = Math.ceil(Math.abs(velY)/0.1);
- let stepY = velY / steps;
+ let ny=camera.position.y+velY;
 
- onGround = false;
-
- for(let i=0;i<steps;i++){
-
-  let ny = camera.position.y + stepY;
-
-  if(stepY <= 0){
-   if(collide(camera.position.x, ny, camera.position.z)){
-    camera.position.y = Math.floor(camera.position.y);
-    velY = 0;
-    onGround = true;
-    break;
-   } else {
-    camera.position.y = ny;
-   }
+ if(velY<=0){
+  if(collide(camera.position.x,ny,camera.position.z)){
+   camera.position.y=Math.floor(camera.position.y);
+   velY=0;
+   onGround=true;
   } else {
-   if(collide(camera.position.x, ny, camera.position.z)){
-    velY = 0;
-    break;
-   } else {
-    camera.position.y = ny;
-   }
+   camera.position.y=ny;
+   onGround=false;
+  }
+ } else {
+  if(collide(camera.position.x,ny,camera.position.z)){
+   velY=0;
+  } else {
+   camera.position.y=ny;
   }
  }
 }
@@ -324,7 +253,7 @@ addEventListener("mousedown",e=>{
   if(data && data[k]){
    delete data[k];
    world.delete(k);
-   rebuildChunk(cx,cz);
+   location.reload(); // quick rebuild
   }
  }
 
@@ -335,19 +264,13 @@ addEventListener("mousedown",e=>{
   const py=by+n.y;
   const pz=bz+n.z;
 
+  // don't place inside player
   if(collide(px+0.5,py+1,pz+0.5)) return;
 
-  const pcx=Math.floor(px/CHUNK);
-  const pcz=Math.floor(pz/CHUNK);
-
-  const pdata=chunkData.get(ckey(pcx,pcz));
   const k=key(px,py,pz);
+  world.set(k,1);
 
-  if(pdata && !pdata[k]){
-   pdata[k]=1;
-   world.set(k,1);
-   rebuildChunk(pcx,pcz);
-  }
+  location.reload(); // quick rebuild
  }
 
 });
@@ -362,7 +285,6 @@ function animate(){
  requestAnimationFrame(animate);
 
  updateChunks();
- unloadChunks();
 
  const speed=0.12;
 
@@ -387,12 +309,6 @@ function animate(){
  renderer.render(scene,camera);
 }
 animate();
-
-onresize=()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-};
 
 </script>
 </body>
