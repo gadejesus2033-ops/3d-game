@@ -2,7 +2,8 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Visible Floor + Movement</title>
+<title>Minecraft Movement + Floor</title>
+
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -26,19 +27,22 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 // camera
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 
 // renderer
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ===== FLOOR (VERY VISIBLE) =====
+// ===== LIGHT (optional but ok) =====
+scene.add(new THREE.AmbientLight(0xffffff));
+
+// ===== FLOOR (VISIBLE) =====
 const floor = new THREE.Mesh(
- new THREE.BoxGeometry(200, 1, 200),
- new THREE.MeshBasicMaterial({ color: 0x00ff00 }) // bright green
+ new THREE.BoxGeometry(200,1,200),
+ new THREE.MeshBasicMaterial({color:0x00ff00})
 );
-floor.position.set(0, -1, 0);
+floor.position.set(0,-1,0);
 scene.add(floor);
 
 // ===== CONTROLS =====
@@ -56,26 +60,13 @@ controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-let forward=false, back=false, left=false, right=false;
+const keys = {};
 
-document.addEventListener("keydown", e => {
- if(e.code==="KeyW") forward=true;
- if(e.code==="KeyS") back=true;
- if(e.code==="KeyA") left=true;
- if(e.code==="KeyD") right=true;
-});
-
-document.addEventListener("keyup", e => {
- if(e.code==="KeyW") forward=false;
- if(e.code==="KeyS") back=false;
- if(e.code==="KeyA") left=false;
- if(e.code==="KeyD") right=false;
-});
+document.addEventListener("keydown", e => keys[e.code]=true);
+document.addEventListener("keyup", e => keys[e.code]=false);
 
 // ===== START POSITION =====
-// IMPORTANT: look slightly DOWN so you SEE the floor
-camera.position.set(0, 2, 5);
-camera.rotation.x = -0.3;
+camera.position.set(0,2,5);
 
 // ===== LOOP =====
 function animate(){
@@ -83,15 +74,25 @@ function animate(){
 
  const speed = 0.15;
 
- if(forward) controls.moveForward(speed);
- if(back) controls.moveForward(-speed);
- if(left) controls.moveRight(-speed);
- if(right) controls.moveRight(speed);
+ // ===== MINECRAFT DIRECTION SYSTEM =====
+ const forward = new THREE.Vector3();
+ camera.getWorldDirection(forward);
+ forward.y = 0;
+ forward.normalize();
 
- // stay on ground
+ const right = new THREE.Vector3();
+ right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+
+ // ===== MOVEMENT (W = where you look) =====
+ if(keys["KeyW"]) controls.moveForward(speed);
+ if(keys["KeyS"]) controls.moveForward(-speed);
+ if(keys["KeyA"]) controls.moveRight(-speed);
+ if(keys["KeyD"]) controls.moveRight(speed);
+
+ // keep player above ground (simple stand system)
  camera.position.y = 2;
 
- renderer.render(scene, camera);
+ renderer.render(scene,camera);
 }
 
 animate();
