@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Smooth Movement</title>
+<title>Voxel Engine</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -92,6 +92,7 @@ const geo=new THREE.BoxGeometry(1,1,1);
 
 // ===== WORLD =====
 const world=new Map();
+const blocks=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
 
 function height(x,z){
@@ -108,11 +109,15 @@ for(let x=-50;x<50;x++){
   let h=height(x,z);
 
   for(let y=-5;y<=h;y++){
-   world.set(key(x,y,z),1);
+
+   const k=key(x,y,z);
+   world.set(k,1);
 
    const block=new THREE.Mesh(geo,material);
    block.position.set(x,y,z);
    scene.add(block);
+
+   blocks.set(k,block);
   }
  }
 }
@@ -138,7 +143,7 @@ let onGround=false;
 const gravity=-0.02;
 const jumpPower=0.35;
 
-// spawn (with eye height)
+// spawn
 camera.position.set(0,10+EYE_HEIGHT,10);
 
 // jump
@@ -148,6 +153,61 @@ document.addEventListener("keydown",e=>{
   onGround=false;
  }
 });
+
+// ===== BLOCK INTERACTION =====
+const raycaster=new THREE.Raycaster();
+
+window.addEventListener("mousedown",(e)=>{
+
+ raycaster.setFromCamera({x:0,y:0},camera);
+
+ const hits=raycaster.intersectObjects(Array.from(blocks.values()));
+ if(!hits.length) return;
+
+ const hit=hits[0];
+
+ const p=hit.point.clone().floor();
+ const n=hit.face.normal.clone();
+
+ const bx=p.x;
+ const by=p.y;
+ const bz=p.z;
+
+ const k=key(bx,by,bz);
+
+ // BREAK
+ if(e.button===0){
+  if(blocks.has(k)){
+   scene.remove(blocks.get(k));
+   blocks.delete(k);
+   world.delete(k);
+  }
+ }
+
+ // PLACE
+ if(e.button===2){
+
+  const px=bx+n.x;
+  const py=by+n.y;
+  const pz=bz+n.z;
+
+  const pk=key(px,py,pz);
+
+  if(!blocks.has(pk)){
+
+   const block=new THREE.Mesh(geo,material);
+   block.position.set(px,py,pz);
+
+   scene.add(block);
+
+   blocks.set(pk,block);
+   world.set(pk,1); // makes it solid
+  }
+ }
+
+});
+
+window.addEventListener("contextmenu",e=>e.preventDefault());
 
 // ===== LOOP =====
 function animate(){
@@ -170,7 +230,6 @@ function animate(){
  if(keys["KeyA"]){dx-=right.x*speed;dz-=right.z*speed;}
  if(keys["KeyD"]){dx+=right.x*speed;dz+=right.z*speed;}
 
- // movement
  let nx=camera.position.x+dx;
  let nz=camera.position.z+dz;
 
@@ -182,16 +241,13 @@ function animate(){
   camera.position.z=nz;
  }
 
- // ===== SMOOTH GRAVITY =====
+ // gravity
  velY+=gravity;
-
- // damp vertical movement (removes bounce feel)
  velY*=0.98;
 
  let ny=camera.position.y+velY;
 
  if(velY<=0){
-
   if(collide(camera.position.x,ny-EYE_HEIGHT,camera.position.z)){
    camera.position.y=Math.floor(ny-EYE_HEIGHT)+EYE_HEIGHT+1;
    velY=0;
@@ -200,15 +256,10 @@ function animate(){
    camera.position.y=ny;
    onGround=false;
   }
-
  } else {
-
   if(!collide(camera.position.x,ny,camera.position.z)){
    camera.position.y=ny;
-  } else {
-   velY=0;
-  }
-
+  } else velY=0;
  }
 
  renderer.render(scene,camera);
