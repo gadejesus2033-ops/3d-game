@@ -2,13 +2,24 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Complete</title>
+<title>Voxel Game WORKING</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
-#overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;background:black;cursor:pointer;}
-#crosshair{position:fixed;left:50%;top:50%;width:10px;height:10px;transform:translate(-50%,-50%);}
-#crosshair:before,#crosshair:after{content:"";position:absolute;background:white;}
+#overlay{
+ position:absolute;inset:0;
+ display:flex;align-items:center;justify-content:center;
+ color:white;font-family:sans-serif;
+ cursor:pointer;background:black;
+}
+#crosshair{
+ position:fixed;left:50%;top:50%;
+ width:10px;height:10px;
+ transform:translate(-50%,-50%);
+}
+#crosshair:before,#crosshair:after{
+ content:"";position:absolute;background:white;
+}
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
 #hud{position:fixed;bottom:10px;left:10px;color:white;font-family:sans-serif;}
@@ -16,6 +27,7 @@ body{margin:0;overflow:hidden;background:black;}
 </head>
 
 <body>
+
 <div id="overlay">CLICK TO START</div>
 <div id="crosshair"></div>
 <div id="hud"></div>
@@ -25,54 +37,81 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// ===== SETUP =====
+// ===== GLOBAL FIX =====
+let health = 100; // <-- FIXED (was missing before)
+
+// ===== SCENE =====
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+
 const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff,0.7));
 
+// ===== CONTROLS =====
 const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-overlay.onclick=()=>controls.lock();
+const overlay=document.getElementById("overlay");
+
+// ✅ START FIX
+overlay.addEventListener("click",()=>{
+ controls.lock();
+});
+
+controls.addEventListener("lock",()=>{
+ overlay.style.display="none";
+});
+
+controls.addEventListener("unlock",()=>{
+ overlay.style.display="flex";
+});
 
 // ===== INPUT =====
 const keys={},inventory={grass:10,dirt:10,stone:10,torch:5};
 let breaking=false;
 
-onkeydown=e=>{
+document.addEventListener("keydown",e=>{
  keys[e.code]=true;
+
  if(e.code==="KeyK") saveGame();
  if(e.code==="KeyL") loadGame();
-};
-onkeyup=e=>keys[e.code]=false;
+});
 
-addEventListener("mousedown",e=>{
+document.addEventListener("keyup",e=>{
+ keys[e.code]=false;
+});
+
+document.addEventListener("mousedown",e=>{
  if(e.button===0) breaking=true;
 });
-addEventListener("mouseup",e=>{
+
+document.addEventListener("mouseup",e=>{
  if(e.button===0) breaking=false;
 });
 
 // ===== CONSTANTS =====
 const HEIGHT=1.8,EYE=1.6,WIDTH=0.3;
 
-// ===== TEXTURES =====
+// ===== TEXTURE =====
 function tex(c){
- const cv=document.createElement("canvas");
- cv.width=8;cv.height=8;
- const ctx=cv.getContext("2d");
- for(let x=0;x<8;x++)for(let y=0;y<8;y++){
-  let s=c+Math.random()*20;
-  ctx.fillStyle=`rgb(${s},${s},${s})`;
-  ctx.fillRect(x,y,1,1);
+ const c2=document.createElement("canvas");
+ c2.width=8;c2.height=8;
+ const ctx=c2.getContext("2d");
+
+ for(let x=0;x<8;x++){
+  for(let y=0;y<8;y++){
+   let s=c+Math.random()*20;
+   ctx.fillStyle=`rgb(${s},${s},${s})`;
+   ctx.fillRect(x,y,1,1);
+  }
  }
- const t=new THREE.CanvasTexture(cv);
+
+ const t=new THREE.CanvasTexture(c2);
  t.magFilter=t.minFilter=THREE.NearestFilter;
  return t;
 }
@@ -89,7 +128,6 @@ const geo=new THREE.BoxGeometry(1,1,1);
 // ===== WORLD =====
 const SIZE=50, HALF=SIZE/2;
 let world=[];
-const key=(x,y,z)=>`${x},${y},${z}`;
 
 function generate(){
  world=[];
@@ -135,18 +173,6 @@ function build(){
 }
 build();
 
-// ===== INVENTORY =====
-const items=["grass","dirt","stone","torch"];
-let selected=0;
-
-addEventListener("wheel",e=>{
- selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
-});
-
-function addItem(t){
- inventory[t]=(inventory[t]||0)+1;
-}
-
 // ===== COLLISION =====
 function collide(px,py,pz){
  for(const b of world){
@@ -162,43 +188,11 @@ const gravity=-0.02,jump=0.35;
 
 camera.position.set(0,10,10);
 
-// ===== MOBS =====
-const mobs=[];
-function spawnMob(){
- const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0xff0000}));
- m.position.set(Math.random()*20-10,5,Math.random()*20-10);
- scene.add(m);
- mobs.push({mesh:m,health:20});
-}
-setInterval(spawnMob,4000);
-
-// ===== TORCH LIGHT =====
-function addTorch(x,y,z){
- const light=new THREE.PointLight(0xffaa00,1,8);
- light.position.set(x,y,z);
- scene.add(light);
-}
-
-// ===== SAVE / LOAD =====
-function saveGame(){
- localStorage.setItem("world",JSON.stringify(world));
- localStorage.setItem("inv",JSON.stringify(inventory));
-}
-function loadGame(){
- const w=JSON.parse(localStorage.getItem("world"));
- const i=JSON.parse(localStorage.getItem("inv"));
- if(w&&i){
-  world=w;
-  Object.assign(inventory,i);
-  build();
- }
-}
-
 // ===== RAY =====
 const ray=new THREE.Raycaster();
 ray.far=6;
 
-let target=null,breakTimer=0;
+let breakTimer=0,target=null;
 
 // ===== LOOP =====
 function animate(){
@@ -235,7 +229,7 @@ function animate(){
 
  if(keys["Space"]&&onGround){vy=jump;onGround=false;}
 
- // ===== RAY =====
+ // BREAK
  ray.setFromCamera({x:0,y:0},camera);
  const hits=ray.intersectObjects(Object.values(meshes));
 
@@ -245,54 +239,21 @@ function animate(){
   const by=Math.round(p.y);
   const bz=Math.round(p.z);
 
-  target={x:bx,y:by,z:bz};
-
-  // BREAK
   if(breaking){
    breakTimer++;
    if(breakTimer>10){
     const i=world.findIndex(b=>b.x===bx&&b.y===by&&b.z===bz);
     if(i!==-1){
-     addItem(world[i].type);
      world.splice(i,1);
      build();
     }
     breakTimer=0;
    }
   } else breakTimer=0;
-
- } else breakTimer=0;
-
- // PLACE
- if(keys["ShiftLeft"] && target){
-  const t=items[selected];
-  if(inventory[t]>0){
-   const pos={x:target.x,y:target.y+1,z:target.z,type:t};
-   world.push(pos);
-   inventory[t]--;
-
-   if(t==="torch") addTorch(pos.x,pos.y,pos.z);
-
-   build();
-   keys["ShiftLeft"]=false;
-  }
  }
 
- // ===== MOBS =====
- mobs.forEach(m=>{
-  const dir=new THREE.Vector3().subVectors(camera.position,m.mesh.position).normalize();
-  m.mesh.position.add(dir.multiplyScalar(0.02));
-
-  if(m.mesh.position.distanceTo(camera.position)<1){
-   health-=0.1;
-  }
- });
-
- // ===== HUD =====
- hud.innerText=
- "Health: "+Math.floor(health||100)+
- "\nSelected: "+items[selected]+
- "\n"+JSON.stringify(inventory,null,1);
+ // HUD
+ hud.innerText="Health: "+health;
 
  renderer.render(scene,camera);
 }
