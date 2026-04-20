@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Clean Build</title>
+<title>Minecraft Engine</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -36,26 +36,25 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// ===== ENGINE =====
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+// ===== SCENE =====
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 
-const renderer = new THREE.WebGLRenderer();
+const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
 
 // ===== CONTROLS =====
-const controls = new THREE.PointerLockControls(camera, document.body);
+const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-const overlay = document.getElementById("overlay");
+const overlay=document.getElementById("overlay");
 
-overlay.onclick = () => controls.lock();
-
+overlay.onclick=()=>controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
@@ -64,7 +63,7 @@ const keys={};
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
 
-// ===== 8x8 TEXTURE =====
+// ===== TEXTURE =====
 function makeTexture(){
  const c=document.createElement("canvas");
  c.width=8;c.height=8;
@@ -130,12 +129,12 @@ function collide(px,py,pz){
  return false;
 }
 
-// ===== PHYSICS =====
+// ===== PLAYER PHYSICS =====
 let velY=0;
 let onGround=false;
 
 const gravity=-0.02;
-const jump=0.35;
+const jumpPower=0.35;
 
 // spawn
 camera.position.set(0,10,10);
@@ -143,7 +142,7 @@ camera.position.set(0,10,10);
 // jump
 document.addEventListener("keydown",e=>{
  if(e.code==="Space" && onGround){
-  velY=jump;
+  velY=jumpPower;
   onGround=false;
  }
 });
@@ -154,6 +153,7 @@ function animate(){
 
  const speed=0.15;
 
+ // direction (Minecraft style)
  const forward=new THREE.Vector3();
  camera.getWorldDirection(forward);
  forward.y=0;
@@ -162,6 +162,7 @@ function animate(){
  const right=new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
+ // movement
  let nx=camera.position.x;
  let nz=camera.position.z;
 
@@ -170,10 +171,15 @@ function animate(){
  if(keys["KeyA"]){nx-=right.x*speed;nz-=right.z*speed;}
  if(keys["KeyD"]){nx+=right.x*speed;nz+=right.z*speed;}
 
- if(!collide(nx,camera.position.y,camera.position.z)) camera.position.x=nx;
- if(!collide(camera.position.x,camera.position.y,nz)) camera.position.z=nz;
+ if(!collide(nx,camera.position.y,camera.position.z)){
+  camera.position.x=nx;
+ }
 
- // gravity
+ if(!collide(camera.position.x,camera.position.y,nz)){
+  camera.position.z=nz;
+ }
+
+ // ===== GRAVITY + JUMP =====
  velY+=gravity;
  let ny=camera.position.y+velY;
 
