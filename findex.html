@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Fixed Voxel Engine</title>
+<title>Fixed Voxel Engine (Stable)</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -26,11 +26,11 @@ body { margin:0; overflow:hidden; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
+
 // ================= SCENE =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-// lighting fix
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1);
 sun.position.set(20, 30, 10);
@@ -62,22 +62,19 @@ function key(x,y,z){
 
 class Block{
  constructor(x,y,z,type,mesh){
-  this.x=x;
-  this.y=y;
-  this.z=z;
+  this.x=x; this.y=y; this.z=z;
   this.type=type;
   this.mesh=mesh;
-  this.solid=true;
  }
 }
 
+// ================= BLOCK SYSTEM =================
 function addBlock(x,y,z,type,material){
  const mesh = new THREE.Mesh(geo, material);
  mesh.position.set(x,y,z);
  scene.add(mesh);
 
  blockMeshes.push(mesh);
-
  world.set(key(x,y,z), new Block(x,y,z,type,mesh));
 }
 
@@ -90,7 +87,7 @@ function removeBlock(x,y,z){
  world.delete(k);
 }
 
-// STRICT GRID LOOKUP (FIXED)
+// IMPORTANT: strict voxel lookup
 function getBlock(x,y,z){
  return world.get(key(Math.floor(x),Math.floor(y),Math.floor(z)));
 }
@@ -103,13 +100,11 @@ for(let x=-20;x<20;x++){
  }
 }
 
-// mountains
 function mountain(cx,cz){
  for(let x=-8;x<=8;x++){
   for(let z=-8;z<=8;z++){
    const d = Math.sqrt(x*x+z*z);
    const h = Math.floor(6-d);
-
    if(h>0){
     for(let y=0;y<h;y++){
      addBlock(cx+x,y,cz+z,"stone",mat.stone);
@@ -124,7 +119,6 @@ mountain(0,25);
 mountain(-25,0);
 mountain(25,0);
 
-// tree
 function tree(x,z){
  for(let i=0;i<4;i++) addBlock(x,i,z,"wood",mat.wood);
 
@@ -156,25 +150,45 @@ document.addEventListener("pointerlockchange",()=>{
 });
 
 // ================= INPUT =================
-const keys={up:false,down:false,left:false,right:false};
+const keys={w:false,a:false,s:false,d:false};
 
+window.onkeydown=e=>{
+ if(e.code==="KeyW")keys.w=true;
+ if(e.code==="KeyS")keys.s=true;
+ if(e.code==="KeyA")keys.a=true;
+ if(e.code==="KeyD")keys.d=true;
+
+ if(e.code==="Space" && onGround){
+  velocityY = jumpPower;
+  onGround = false;
+ }
+};
+
+window.onkeyup=e=>{
+ if(e.code==="KeyW")keys.w=false;
+ if(e.code==="KeyS")keys.s=false;
+ if(e.code==="KeyA")keys.a=false;
+ if(e.code==="KeyD")keys.d=false;
+};
+
+// ================= PLAYER PHYSICS =================
 let velocityY=0;
 const gravity=-0.01;
 const jumpPower=0.2;
 let onGround=false;
 
-const player = {width:0.6,height:2,depth:0.6};
+const player = {w:0.6,h:2,d:0.6};
 
-// ================= COLLISION (FIXED) =================
+// ================= COLLISION =================
 function collides(x,y,z){
- const minX = Math.floor(x - player.width/2);
- const maxX = Math.floor(x + player.width/2);
+ const minX = Math.floor(x - player.w/2);
+ const maxX = Math.floor(x + player.w/2);
 
  const minY = Math.floor(y);
- const maxY = Math.floor(y + player.height);
+ const maxY = Math.floor(y + player.h);
 
- const minZ = Math.floor(z - player.depth/2);
- const maxZ = Math.floor(z + player.depth/2);
+ const minZ = Math.floor(z - player.d/2);
+ const maxZ = Math.floor(z + player.d/2);
 
  for(let ix=minX; ix<=maxX; ix++){
   for(let iy=minY; iy<=maxY; iy++){
@@ -190,46 +204,19 @@ function collides(x,y,z){
 
 // ================= MOVE =================
 function move(dx,dz){
- const steps = 8;
+ const nx = camera.position.x + dx;
+ const nz = camera.position.z + dz;
 
- for(let i=0;i<steps;i++){
-  let sx = dx/steps;
-  let sz = dz/steps;
+ if(!collides(nx,camera.position.y,camera.position.z)){
+  camera.position.x = nx;
+ }
 
-  let nx = camera.position.x + sx;
-  let nz = camera.position.z + sz;
-
-  if(!collides(nx,camera.position.y,camera.position.z)){
-   camera.position.x = nx;
-  }
-
-  if(!collides(camera.position.x,camera.position.y,nz)){
-   camera.position.z = nz;
-  }
+ if(!collides(camera.position.x,camera.position.y,nz)){
+  camera.position.z = nz;
  }
 }
 
-// ================= INPUT =================
-window.onkeydown=e=>{
- if(e.code==="ArrowUp")keys.up=true;
- if(e.code==="ArrowDown")keys.down=true;
- if(e.code==="ArrowLeft")keys.left=true;
- if(e.code==="ArrowRight")keys.right=true;
-
- if(e.code==="Space" && onGround){
-  velocityY = jumpPower;
-  onGround = false;
- }
-};
-
-window.onkeyup=e=>{
- if(e.code==="ArrowUp")keys.up=false;
- if(e.code==="ArrowDown")keys.down=false;
- if(e.code==="ArrowLeft")keys.left=false;
- if(e.code==="ArrowRight")keys.right=false;
-};
-
-// ================= RAYCAST (FIXED ONLY BLOCKS) =================
+// ================= RAYCAST =================
 const raycaster = new THREE.Raycaster();
 
 window.addEventListener("mousedown",(e)=>{
@@ -240,9 +227,9 @@ window.addEventListener("mousedown",(e)=>{
 
  const pos = hits[0].object.position;
 
- const x = Math.round(pos.x);
- const y = Math.round(pos.y);
- const z = Math.round(pos.z);
+ const x = Math.floor(pos.x);
+ const y = Math.floor(pos.y);
+ const z = Math.floor(pos.z);
 
  if(e.button===0){
   removeBlock(x,y,z);
@@ -257,9 +244,10 @@ window.addEventListener("mousedown",(e)=>{
 
 window.addEventListener("contextmenu",e=>e.preventDefault());
 
-// ================= LOOP =================
-camera.position.set(0,3,5);
+// ================= START POSITION =================
+camera.position.set(0,10,5);
 
+// ================= LOOP =================
 function animate(){
  requestAnimationFrame(animate);
 
@@ -273,21 +261,24 @@ function animate(){
  const right = new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- let mx=0, mz=0;
+ let dx=0,dz=0;
 
- if(keys.up){mx += forward.x*speed; mz += forward.z*speed;}
- if(keys.down){mx -= forward.x*speed; mz -= forward.z*speed;}
- if(keys.left){mx -= right.x*speed; mz -= right.z*speed;}
- if(keys.right){mx += right.x*speed; mz += right.z*speed;}
+ if(keys.w){dx += forward.x*speed; dz += forward.z*speed;}
+ if(keys.s){dx -= forward.x*speed; dz -= forward.z*speed;}
+ if(keys.a){dx -= right.x*speed; dz -= right.z*speed;}
+ if(keys.d){dx += right.x*speed; dz += right.z*speed;}
 
- move(mx,mz);
+ move(dx,dz);
 
-// gravity
+ // gravity
  velocityY += gravity;
  camera.position.y += velocityY;
 
- if(camera.position.y <= 2){
-  camera.position.y = 2;
+ // ground collision (FIXED)
+ const feet = camera.position.y - 1.9;
+
+ if(collides(camera.position.x, feet, camera.position.z)){
+  camera.position.y = Math.ceil(camera.position.y);
   velocityY = 0;
   onGround = true;
  }
@@ -301,7 +292,7 @@ window.addEventListener("resize",()=>{
  camera.updateProjectionMatrix();
  renderer.setSize(innerWidth,innerHeight);
 });
-</script>
 
+</script>
 </body>
 </html>
