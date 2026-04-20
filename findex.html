@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Base Engine (Stable)</title>
+<title>Minecraft Base (No Gravity)</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -42,27 +42,24 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// =====================================================
-// 🎮 CORE ENGINE (DO NOT TOUCH MOVEMENT LOGIC)
-// =====================================================
+// =====================
+// ENGINE
+// =====================
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(
- 75, innerWidth/innerHeight, 0.1, 1000
-);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// light
 scene.add(new THREE.AmbientLight(0xffffff));
 
-// =====================================================
-// 🎮 CONTROLS (LOCKED MOVEMENT SYSTEM)
-// =====================================================
+// =====================
+// CONTROLS (LOCKED MOVEMENT)
+// =====================
 
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
@@ -79,18 +76,18 @@ controls.addEventListener("unlock",()=>{
  document.getElementById("overlay").style.display="flex";
 });
 
-// =====================================================
-// ⌨ INPUT
-// =====================================================
+// =====================
+// INPUT
+// =====================
 
-const keys = {};
+const keys={};
 
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
 
-// =====================================================
-// 🌍 WORLD (TERRAIN)
-// =====================================================
+// =====================
+// WORLD
+// =====================
 
 const world = new Map();
 
@@ -98,7 +95,7 @@ function key(x,y,z){
  return `${x},${y},${z}`;
 }
 
-// terrain function
+// terrain height
 function height(x,z){
  return Math.floor(
   Math.sin(x*0.2)*2 +
@@ -125,9 +122,9 @@ for(let x=-30;x<30;x++){
  }
 }
 
-// =====================================================
-// 🧱 COLLISION SYSTEM
-// =====================================================
+// =====================
+// COLLISION
+// =====================
 
 function collide(px,py,pz){
 
@@ -151,30 +148,22 @@ function collide(px,py,pz){
  return false;
 }
 
-// =====================================================
-// 🧲 PHYSICS (GRAVITY)
-// =====================================================
+// =====================
+// START POSITION
+// =====================
 
-let velY = 0;
-const gravity = -0.015;
+camera.position.set(0,5,10);
 
-let onGround = false;
-
-// spawn
-camera.position.set(0,10,10);
-
-// =====================================================
-// 🔁 GAME LOOP
-// =====================================================
+// =====================
+// LOOP (MINECRAFT MOVEMENT ONLY)
+// =====================
 
 function animate(){
  requestAnimationFrame(animate);
 
  const speed = 0.15;
 
- // ---------------------
- // direction system
- // ---------------------
+ // direction camera faces
  const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
  forward.y = 0;
@@ -183,56 +172,22 @@ function animate(){
  const right = new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- // ---------------------
- // X movement
- // ---------------------
+ // proposed movement
  let nx = camera.position.x;
+ let nz = camera.position.z;
 
- if(keys["KeyW"]) nx += forward.x * speed;
- if(keys["KeyS"]) nx -= forward.x * speed;
- if(keys["KeyA"]) nx -= right.x * speed;
- if(keys["KeyD"]) nx += right.x * speed;
+ if(keys["KeyW"]){nx += forward.x * speed; nz += forward.z * speed;}
+ if(keys["KeyS"]){nx -= forward.x * speed; nz -= forward.z * speed;}
+ if(keys["KeyA"]){nx -= right.x * speed; nz -= right.z * speed;}
+ if(keys["KeyD"]){nx += right.x * speed; nz += right.z * speed;}
 
+ // collision check
  if(!collide(nx,camera.position.y,camera.position.z)){
   camera.position.x = nx;
  }
 
- // ---------------------
- // Z movement
- // ---------------------
- let nz = camera.position.z;
-
- if(keys["KeyW"]) nz += forward.z * speed;
- if(keys["KeyS"]) nz -= forward.z * speed;
- if(keys["KeyA"]) nz -= right.z * speed;
- if(keys["KeyD"]) nz += right.z * speed;
-
  if(!collide(camera.position.x,camera.position.y,nz)){
   camera.position.z = nz;
- }
-
- // ---------------------
- // GRAVITY (FIXED ORDER)
- // ---------------------
- velY += gravity;
-
- let ny = camera.position.y + velY;
-
- if(velY <= 0){
-  if(collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y = Math.floor(camera.position.y);
-   velY = 0;
-   onGround = true;
-  } else {
-   camera.position.y = ny;
-   onGround = false;
-  }
- } else {
-  if(!collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y = ny;
-  } else {
-   velY = 0;
-  }
  }
 
  renderer.render(scene,camera);
