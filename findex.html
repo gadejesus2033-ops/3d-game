@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Jump + Terrain</title>
+<title>Minecraft 8x8 Texture World</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -70,10 +70,45 @@ document.getElementById("overlay").onclick = () => controls.lock();
 // INPUT
 // =====================
 
-const keys = {};
+const keys={};
 
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
+
+// =====================
+// 🧱 8x8 TEXTURE CREATION
+// =====================
+
+function create8x8Texture(){
+
+ const canvas = document.createElement("canvas");
+ canvas.width = 8;
+ canvas.height = 8;
+
+ const ctx = canvas.getContext("2d");
+
+ for(let x=0;x<8;x++){
+  for(let y=0;y<8;y++){
+
+   // simple Minecraft-style noise pattern
+   const shade = Math.floor(120 + Math.random()*80);
+
+   ctx.fillStyle = `rgb(${shade},${shade+30},${shade-20})`;
+   ctx.fillRect(x,y,1,1);
+  }
+ }
+
+ const texture = new THREE.CanvasTexture(canvas);
+ texture.magFilter = THREE.NearestFilter;
+ texture.minFilter = THREE.NearestFilter;
+
+ return texture;
+}
+
+const blockTexture = create8x8Texture();
+
+const blockMat = new THREE.MeshLambertMaterial({map:blockTexture});
+const geo = new THREE.BoxGeometry(1,1,1);
 
 // =====================
 // WORLD
@@ -93,9 +128,7 @@ function height(x,z){
  );
 }
 
-const geo = new THREE.BoxGeometry(1,1,1);
-const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
-
+// terrain
 for(let x=-60;x<60;x++){
  for(let z=-60;z<60;z++){
 
@@ -104,7 +137,7 @@ for(let x=-60;x<60;x++){
   for(let y=-5;y<=h;y++){
    world.set(key(x,y,z),1);
 
-   const block = new THREE.Mesh(geo,mat);
+   const block = new THREE.Mesh(geo,blockMat);
    block.position.set(x,y,z);
    scene.add(block);
   }
@@ -138,7 +171,7 @@ function collide(px,py,pz){
 }
 
 // =====================
-// PHYSICS (NEW)
+// PHYSICS
 // =====================
 
 let velY = 0;
@@ -147,15 +180,11 @@ let onGround = false;
 const gravity = -0.02;
 const jumpPower = 0.35;
 
-// start
 camera.position.set(0,10,10);
 
-// =====================
-// INPUT JUMP
-// =====================
-
+// jump
 document.addEventListener("keydown",e=>{
- if(e.code === "Space" && onGround){
+ if(e.code==="Space" && onGround){
   velY = jumpPower;
   onGround = false;
  }
@@ -170,7 +199,6 @@ function animate(){
 
  const speed = 0.15;
 
- // direction
  const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
  forward.y = 0;
@@ -179,7 +207,6 @@ function animate(){
  const right = new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- // movement XZ
  let nx = camera.position.x;
  let nz = camera.position.z;
 
@@ -196,10 +223,7 @@ function animate(){
   camera.position.z = nz;
  }
 
- // =====================
- // GRAVITY + JUMP
- // =====================
-
+ // gravity
  velY += gravity;
 
  let ny = camera.position.y + velY;
