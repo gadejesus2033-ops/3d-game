@@ -2,11 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Correct Collision</title>
+<title>Voxel Game - Final Build</title>
 
 <style>
 body { margin:0; overflow:hidden; }
 
+/* Overlay */
 #overlay{
  position:absolute;
  inset:0;
@@ -19,6 +20,7 @@ body { margin:0; overflow:hidden; }
  cursor:pointer;
 }
 
+/* Crosshair */
 #crosshair{
  position:fixed;
  left:50%;
@@ -28,21 +30,17 @@ body { margin:0; overflow:hidden; }
  transform:translate(-50%,-50%);
  pointer-events:none;
 }
-
-#crosshair:before,
-#crosshair:after{
+#crosshair:before,#crosshair:after{
  content:"";
  position:absolute;
  background:white;
 }
-
 #crosshair:before{
  width:10px;
  height:2px;
  top:4px;
  left:0;
 }
-
 #crosshair:after{
  width:2px;
  height:10px;
@@ -67,9 +65,9 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(20,30,10);
-scene.add(light);
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.position.set(20,30,10);
+scene.add(sun);
 
 // ================= CAMERA =================
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
@@ -81,15 +79,15 @@ document.body.appendChild(renderer.domElement);
 const geo = new THREE.BoxGeometry(1,1,1);
 
 const mat = {
- grass:new THREE.MeshLambertMaterial({color:0x3cb043}),
- dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b}),
- stone:new THREE.MeshLambertMaterial({color:0x888888})
+ grass:new THREE.MeshLambertMaterial({color:0x3cb043, side:THREE.DoubleSide}),
+ dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b, side:THREE.DoubleSide}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888, side:THREE.DoubleSide})
 };
 
 const world = new Map();
 const meshes = [];
 
-const key = (x,y,z)=>`${x},${y},${z}`;
+const key=(x,y,z)=>`${x},${y},${z}`;
 
 function add(x,y,z,material){
  const m=new THREE.Mesh(geo,material);
@@ -108,7 +106,7 @@ function remove(x,y,z){
  if(obj) scene.remove(obj);
 }
 
-// ================= WORLD =================
+// ================= WORLD GEN =================
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
   add(x,-1,z,mat.grass);
@@ -118,8 +116,8 @@ for(let x=-25;x<25;x++){
 
 // ================= PLAYER =================
 const player={
- width:0.6,
- depth:0.6,
+ width:0.98,
+ depth:0.98,
  height:2
 };
 
@@ -129,33 +127,28 @@ let onGround=false;
 const gravity=-0.015;
 const jumpPower=0.22;
 
-// ================= VOXEL FIX =================
-function voxel(x){
- return Math.floor(x);
-}
-
-// ================= COLLISION (FIXED) =================
+// ================= COLLISION =================
 function collide(px,py,pz){
 
- const minX = voxel(px - player.width/2);
- const maxX = voxel(px + player.width/2);
+ const halfW = player.width/2;
+ const halfD = player.depth/2;
 
- const minY = voxel(py);
- const maxY = voxel(py + player.height);
+ const minX = Math.floor(px-halfW);
+ const maxX = Math.floor(px+halfW);
 
- const minZ = voxel(pz - player.depth/2);
- const maxZ = voxel(pz + player.depth/2);
+ const minY = Math.floor(py);
+ const maxY = Math.floor(py+player.height-0.001);
+
+ const minZ = Math.floor(pz-halfD);
+ const maxZ = Math.floor(pz+halfD);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
    for(let z=minZ;z<=maxZ;z++){
-    if(world.has(`${x},${y},${z}`)){
-     return true;
-    }
+    if(world.has(`${x},${y},${z}`)) return true;
    }
   }
  }
-
  return false;
 }
 
@@ -222,28 +215,29 @@ window.addEventListener("mousedown",e=>{
  ray.setFromCamera({x:0,y:0},camera);
 
  const hits=ray.intersectObjects(meshes);
- if(!hits.length) return;
+ if(!hits.length)return;
 
  const hit=hits[0];
+ const pos=hit.object.position;
 
- const p=hit.object.position;
-
- const x=Math.floor(p.x);
- const y=Math.floor(p.y);
- const z=Math.floor(p.z);
+ const x=Math.floor(pos.x);
+ const y=Math.floor(pos.y);
+ const z=Math.floor(pos.z);
 
  // break
  if(e.button===0){
   remove(x,y,z);
  }
 
- // place on face (FIXED)
+ // place (face correct)
  if(e.button===2){
-  const n=hit.face.normal;
 
-  const px=x+n.x;
-  const py=y+n.y;
-  const pz=z+n.z;
+  let n=hit.face.normal.clone();
+  n.transformDirection(hit.object.matrixWorld);
+
+  const px=Math.floor(hit.point.x+n.x*0.5);
+  const py=Math.floor(hit.point.y+n.y*0.5);
+  const pz=Math.floor(hit.point.z+n.z*0.5);
 
   if(!world.has(key(px,py,pz))){
    add(px,py,pz,mat.stone);
