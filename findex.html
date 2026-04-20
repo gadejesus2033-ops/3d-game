@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine</title>
+<title>Voxel Engine Advanced</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -59,8 +59,12 @@ controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
 const keys={};
+let mouseDown=false;
+
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
+document.addEventListener("mousedown",()=>mouseDown=true);
+document.addEventListener("mouseup",()=>mouseDown=false);
 
 // ===== CONSTANTS =====
 const PLAYER_HEIGHT=1.8;
@@ -105,48 +109,49 @@ function height(x,z){
 
 for(let x=-50;x<50;x++){
  for(let z=-50;z<50;z++){
-
   let h=height(x,z);
-
   for(let y=-5;y<=h;y++){
-
    const k=key(x,y,z);
    world.set(k,1);
 
    const block=new THREE.Mesh(geo,material);
    block.position.set(x,y,z);
    scene.add(block);
-
    blocks.set(k,block);
   }
  }
 }
 
+// ===== OUTLINE =====
+const outlineGeo=new THREE.EdgesGeometry(geo);
+const outlineMat=new THREE.LineBasicMaterial({color:0x000000});
+const outline=new THREE.LineSegments(outlineGeo,outlineMat);
+scene.add(outline);
+outline.visible=false;
+
+// ===== RAYCAST =====
+const raycaster=new THREE.Raycaster();
+
+let targetBlock=null;
+let breakTimer=0;
+const BREAK_TIME=20;
+
 // ===== COLLISION =====
 function collide(px,py,pz){
-
  for(let x=Math.floor(px-PLAYER_WIDTH);x<=Math.floor(px+PLAYER_WIDTH);x++){
  for(let y=Math.floor(py);y<=Math.floor(py+PLAYER_HEIGHT);y++){
  for(let z=Math.floor(pz-PLAYER_WIDTH);z<=Math.floor(pz+PLAYER_WIDTH);z++){
-
   if(world.has(key(x,y,z))) return true;
-
  }}}
-
  return false;
 }
 
 // ===== PHYSICS =====
-let velY=0;
-let onGround=false;
+let velY=0,onGround=false;
+const gravity=-0.02,jumpPower=0.35;
 
-const gravity=-0.02;
-const jumpPower=0.35;
-
-// spawn
 camera.position.set(0,10+EYE_HEIGHT,10);
 
-// jump
 document.addEventListener("keydown",e=>{
  if(e.code==="Space" && onGround){
   velY=jumpPower;
@@ -154,57 +159,27 @@ document.addEventListener("keydown",e=>{
  }
 });
 
-// ===== BLOCK INTERACTION =====
-const raycaster=new THREE.Raycaster();
-
+// ===== CLICK PLACE =====
 window.addEventListener("mousedown",(e)=>{
+ if(e.button!==2) return;
 
- raycaster.setFromCamera({x:0,y:0},camera);
+ if(!targetBlock) return;
 
- const hits=raycaster.intersectObjects(Array.from(blocks.values()));
- if(!hits.length) return;
+ const {pos,normal}=targetBlock;
 
- const hit=hits[0];
+ const px=pos.x+normal.x;
+ const py=pos.y+normal.y;
+ const pz=pos.z+normal.z;
 
- const p=hit.point.clone().floor();
- const n=hit.face.normal.clone();
+ const pk=key(px,py,pz);
 
- const bx=p.x;
- const by=p.y;
- const bz=p.z;
-
- const k=key(bx,by,bz);
-
- // BREAK
- if(e.button===0){
-  if(blocks.has(k)){
-   scene.remove(blocks.get(k));
-   blocks.delete(k);
-   world.delete(k);
-  }
+ if(!blocks.has(pk)){
+  const b=new THREE.Mesh(geo,material);
+  b.position.set(px,py,pz);
+  scene.add(b);
+  blocks.set(pk,b);
+  world.set(pk,1);
  }
-
- // PLACE
- if(e.button===2){
-
-  const px=bx+n.x;
-  const py=by+n.y;
-  const pz=bz+n.z;
-
-  const pk=key(px,py,pz);
-
-  if(!blocks.has(pk)){
-
-   const block=new THREE.Mesh(geo,material);
-   block.position.set(px,py,pz);
-
-   scene.add(block);
-
-   blocks.set(pk,block);
-   world.set(pk,1); // makes it solid
-  }
- }
-
 });
 
 window.addEventListener("contextmenu",e=>e.preventDefault());
@@ -213,6 +188,7 @@ window.addEventListener("contextmenu",e=>e.preventDefault());
 function animate(){
  requestAnimationFrame(animate);
 
+ // movement
  const speed=0.15;
 
  const forward=new THREE.Vector3();
@@ -224,7 +200,6 @@ function animate(){
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
  let dx=0,dz=0;
-
  if(keys["KeyW"]){dx+=forward.x*speed;dz+=forward.z*speed;}
  if(keys["KeyS"]){dx-=forward.x*speed;dz-=forward.z*speed;}
  if(keys["KeyA"]){dx-=right.x*speed;dz-=right.z*speed;}
@@ -233,13 +208,8 @@ function animate(){
  let nx=camera.position.x+dx;
  let nz=camera.position.z+dz;
 
- if(!collide(nx,camera.position.y-EYE_HEIGHT,camera.position.z)){
-  camera.position.x=nx;
- }
-
- if(!collide(camera.position.x,camera.position.y-EYE_HEIGHT,nz)){
-  camera.position.z=nz;
- }
+ if(!collide(nx,camera.position.y-EYE_HEIGHT,camera.position.z)) camera.position.x=nx;
+ if(!collide(camera.position.x,camera.position.y-EYE_HEIGHT,nz)) camera.position.z=nz;
 
  // gravity
  velY+=gravity;
@@ -250,16 +220,48 @@ function animate(){
  if(velY<=0){
   if(collide(camera.position.x,ny-EYE_HEIGHT,camera.position.z)){
    camera.position.y=Math.floor(ny-EYE_HEIGHT)+EYE_HEIGHT+1;
-   velY=0;
-   onGround=true;
+   velY=0;onGround=true;
   } else {
-   camera.position.y=ny;
-   onGround=false;
+   camera.position.y=ny;onGround=false;
   }
  } else {
   if(!collide(camera.position.x,ny,camera.position.z)){
    camera.position.y=ny;
   } else velY=0;
+ }
+
+ // ===== TARGET BLOCK =====
+ raycaster.setFromCamera({x:0,y:0},camera);
+ const hits=raycaster.intersectObjects(Array.from(blocks.values()));
+
+ if(hits.length){
+  const hit=hits[0];
+  const pos=hit.object.position.clone();
+  const normal=hit.face.normal.clone();
+
+  targetBlock={pos,normal};
+
+  outline.visible=true;
+  outline.position.copy(pos);
+
+  // breaking
+  if(mouseDown){
+   breakTimer++;
+   if(breakTimer>BREAK_TIME){
+    const k=key(pos.x,pos.y,pos.z);
+    scene.remove(blocks.get(k));
+    blocks.delete(k);
+    world.delete(k);
+    breakTimer=0;
+   }
+  } else {
+   breakTimer=0;
+  }
+
+ } else {
+  outline.visible=false;
+  targetBlock=null;
+  breakTimer=0;
  }
 
  renderer.render(scene,camera);
