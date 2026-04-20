@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Caves + Blocks</title>
+<title>Voxel Engine Ultimate</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -11,30 +11,39 @@ body{margin:0;overflow:hidden;background:black;}
 #crosshair:before,#crosshair:after{content:"";position:absolute;background:white;}
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
+#hud{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);color:white;font-family:sans-serif;}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
 <div id="crosshair"></div>
+<div id="hud"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== SCENE =====
+// ===== BASIC SETUP =====
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
+
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
-scene.add(new THREE.AmbientLight(0xffffff));
 
-// ===== CONTROLS =====
+// lighting
+scene.add(new THREE.AmbientLight(0xffffff,0.5));
+const sun=new THREE.DirectionalLight(0xffffff,1);
+sun.position.set(20,40,20);
+scene.add(sun);
+
+// controls
 const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
+
 const overlay=document.getElementById("overlay");
 overlay.onclick=()=>controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
@@ -51,27 +60,27 @@ onmouseup=()=>mouseDown=false;
 const PLAYER_HEIGHT=1.8,EYE_HEIGHT=1.6,PLAYER_WIDTH=0.3;
 
 // ===== TEXTURES =====
-function makeTex(color){
- const c=document.createElement("canvas");
- c.width=8;c.height=8;
- const ctx=c.getContext("2d");
- for(let x=0;x<8;x++){
-  for(let y=0;y<8;y++){
-   let s=color+Math.random()*30;
-   ctx.fillStyle=`rgb(${s},${s},${s})`;
-   ctx.fillRect(x,y,1,1);
-  }
+function tex(c){
+ const canvas=document.createElement("canvas");
+ canvas.width=8;canvas.height=8;
+ const ctx=canvas.getContext("2d");
+ for(let x=0;x<8;x++)for(let y=0;y<8;y++){
+  let s=c+Math.random()*20;
+  ctx.fillStyle=`rgb(${s},${s},${s})`;
+  ctx.fillRect(x,y,1,1);
  }
- const t=new THREE.CanvasTexture(c);
- t.magFilter=THREE.NearestFilter;
- t.minFilter=THREE.NearestFilter;
+ const t=new THREE.CanvasTexture(canvas);
+ t.magFilter=t.minFilter=THREE.NearestFilter;
  return t;
 }
 
-const materials={
- grass:new THREE.MeshLambertMaterial({map:makeTex(120)}),
- dirt:new THREE.MeshLambertMaterial({map:makeTex(100)}),
- stone:new THREE.MeshLambertMaterial({map:makeTex(80)})
+const mats={
+ grass:new THREE.MeshLambertMaterial({map:tex(120)}),
+ dirt:new THREE.MeshLambertMaterial({map:tex(100)}),
+ stone:new THREE.MeshLambertMaterial({map:tex(80)}),
+ wood:new THREE.MeshLambertMaterial({map:tex(140)}),
+ leaves:new THREE.MeshLambertMaterial({map:tex(110),transparent:true,opacity:0.8}),
+ torch:new THREE.MeshBasicMaterial({color:0xffaa33})
 };
 
 const geo=new THREE.BoxGeometry(1,1,1);
@@ -81,57 +90,76 @@ const world=new Map();
 const blocks=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
 
-// height map
-function height(x,z){
- return Math.floor(
-  Math.sin(x*0.1)*4 +
-  Math.cos(z*0.1)*4
- );
-}
+// noise
+const h=(x,z)=>Math.floor(Math.sin(x*0.1)*4+Math.cos(z*0.1)*4);
+const cave=(x,y,z)=>Math.sin(x*0.15)+Math.sin(y*0.15)+Math.cos(z*0.15);
 
-// cave noise
-function cave(x,y,z){
- return Math.sin(x*0.15)+Math.sin(y*0.15)+Math.cos(z*0.15);
-}
-
-// build world
-for(let x=-50;x<50;x++){
- for(let z=-50;z<50;z++){
-
-  let h=height(x,z);
-
-  for(let y=-10;y<=h;y++){
-
-   // carve caves
-   if(cave(x,y,z)>1.2) continue;
-
-   let type="stone";
-   if(y===h) type="grass";
-   else if(y>h-3) type="dirt";
-
-   const k=key(x,y,z);
-   world.set(k,type);
-
-   const b=new THREE.Mesh(geo,materials[type]);
-   b.position.set(x,y,z);
-   scene.add(b);
-
-   blocks.set(k,b);
+// tree
+function tree(x,y,z){
+ for(let i=1;i<5;i++){
+  place(x,y+i,z,"wood");
+ }
+ for(let dx=-2;dx<=2;dx++){
+ for(let dz=-2;dz<=2;dz++){
+ for(let dy=3;dy<=5;dy++){
+  if(Math.random()>0.3){
+   place(x+dx,y+dy,z+dz,"leaves");
   }
+ }}}
+}
+
+// place helper
+function place(x,y,z,type){
+ const k=key(x,y,z);
+ if(blocks.has(k)) return;
+
+ const b=new THREE.Mesh(geo,mats[type]);
+ b.position.set(x,y,z);
+ scene.add(b);
+
+ blocks.set(k,b);
+ world.set(k,type);
+
+ if(type==="torch"){
+  const light=new THREE.PointLight(0xffaa33,1,10);
+  light.position.set(x,y,z);
+  scene.add(light);
  }
 }
 
-// ===== OUTLINE =====
-const outline=new THREE.LineSegments(
- new THREE.EdgesGeometry(geo),
- new THREE.LineBasicMaterial({color:0x000000})
-);
-scene.add(outline);
-outline.visible=false;
+// generate chunk
+function genChunk(cx,cz){
+ for(let x=0;x<16;x++){
+ for(let z=0;z<16;z++){
+  const wx=cx*16+x;
+  const wz=cz*16+z;
+  let top=h(wx,wz);
 
-// ===== RAY =====
-const raycaster=new THREE.Raycaster();
-let target=null,breakTimer=0,BREAK_TIME=15;
+  for(let y=-10;y<=top;y++){
+
+   if(cave(wx,y,wz)>1.2) continue;
+
+   let t="stone";
+   if(y===top) t="grass";
+   else if(y>top-3) t="dirt";
+
+   place(wx,y,wz,t);
+  }
+
+  if(Math.random()<0.02) tree(wx,top,wz);
+ }}
+}
+
+// load chunks
+function updateChunks(){
+ const cx=Math.floor(camera.position.x/16);
+ const cz=Math.floor(camera.position.z/16);
+
+ for(let x=-2;x<=2;x++){
+ for(let z=-2;z<=2;z++){
+  genChunk(cx+x,cz+z);
+ }}
+}
 
 // ===== COLLISION =====
 function collide(px,py,pz){
@@ -143,37 +171,50 @@ function collide(px,py,pz){
  return false;
 }
 
+// ===== INVENTORY =====
+const inv=["dirt","stone","wood","leaves","torch"];
+let slot=0;
+
+addEventListener("wheel",e=>{
+ slot=(slot+(e.deltaY>0?1:-1)+inv.length)%inv.length;
+});
+
+// HUD
+const hud=document.getElementById("hud");
+
+// ===== RAY =====
+const ray=new THREE.Raycaster();
+let target=null,breakTimer=0;
+
+// outline
+const outline=new THREE.LineSegments(
+ new THREE.EdgesGeometry(geo),
+ new THREE.LineBasicMaterial({color:0x000000})
+);
+scene.add(outline);
+outline.visible=false;
+
 // ===== PHYSICS =====
 let velY=0,onGround=false;
 const gravity=-0.02,jump=0.35;
 
-camera.position.set(0,10+EYE_HEIGHT,10);
+camera.position.set(0,20,0);
 
-onkeydown=e=>{
- keys[e.code]=true;
- if(e.code==="Space"&&onGround){velY=jump;onGround=false;}
-};
-onkeyup=e=>keys[e.code]=false;
-
-// place
+// ===== CLICK =====
 addEventListener("mousedown",e=>{
  if(e.button!==2||!target) return;
+
  const {pos,normal}=target;
- const px=pos.x+normal.x,py=pos.y+normal.y,pz=pos.z+normal.z;
- const k=key(px,py,pz);
- if(!blocks.has(k)){
-  const b=new THREE.Mesh(geo,materials.dirt);
-  b.position.set(px,py,pz);
-  scene.add(b);
-  blocks.set(k,b);
-  world.set(k,"dirt");
- }
+ place(pos.x+normal.x,pos.y+normal.y,pos.z+normal.z,inv[slot]);
 });
+
 addEventListener("contextmenu",e=>e.preventDefault());
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
+
+ updateChunks();
 
  const speed=0.15;
 
@@ -207,9 +248,9 @@ function animate(){
   else velY=0;
  }
 
- // target block
- raycaster.setFromCamera({x:0,y:0},camera);
- const hits=raycaster.intersectObjects([...blocks.values()]);
+ // ray
+ ray.setFromCamera({x:0,y:0},camera);
+ const hits=ray.intersectObjects([...blocks.values()]);
 
  if(hits.length){
   const h=hits[0];
@@ -222,7 +263,7 @@ function animate(){
 
   if(mouseDown){
    breakTimer++;
-   if(breakTimer>BREAK_TIME){
+   if(breakTimer>15){
     const k=key(pos.x,pos.y,pos.z);
     scene.remove(blocks.get(k));
     blocks.delete(k);
@@ -236,6 +277,8 @@ function animate(){
   target=null;
   breakTimer=0;
  }
+
+ hud.innerText="Block: "+inv[slot];
 
  renderer.render(scene,camera);
 }
