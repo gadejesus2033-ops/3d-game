@@ -2,9 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Correct Movement</title>
+<title>Movement + Land + Trees</title>
+
 <style>
 body { margin:0; overflow:hidden; }
+
 #overlay {
  position:absolute; inset:0;
  background:black; color:white;
@@ -12,6 +14,7 @@ body { margin:0; overflow:hidden; }
 }
 </style>
 </head>
+
 <body tabindex="0">
 
 <div id="overlay">CLICK TO START</div>
@@ -32,13 +35,54 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
-// ground
-const ground = new THREE.Mesh(
- new THREE.BoxGeometry(50,1,50),
- new THREE.MeshLambertMaterial({color:0x00aa00})
-);
-ground.position.y = -1;
-scene.add(ground);
+// ===== GROUND (5 squares) =====
+const groundMaterial = new THREE.MeshLambertMaterial({color:0x00aa00});
+
+function makeGround(x,z){
+ const g = new THREE.Mesh(new THREE.BoxGeometry(50,1,50), groundMaterial);
+ g.position.set(x,-1,z);
+ scene.add(g);
+}
+
+makeGround(0,0);      // center
+makeGround(50,0);     // right
+makeGround(-50,0);    // left
+makeGround(0,50);     // back
+makeGround(0,-50);    // forward
+
+// ===== TREES =====
+function createTree(x, z){
+ const trunkMat = new THREE.MeshLambertMaterial({color:0x8b5a2b});
+ const leafMat  = new THREE.MeshLambertMaterial({color:0x2ecc71});
+
+ const baseY = 0;
+
+ // trunk
+ for(let i=0;i<3;i++){
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), trunkMat);
+  trunk.position.set(x, baseY + i, z);
+  scene.add(trunk);
+ }
+
+ // leaves
+ for(let lx=-1; lx<=1; lx++){
+  for(let lz=-1; lz<=1; lz++){
+   for(let ly=2; ly<=3; ly++){
+    const leaves = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), leafMat);
+    leaves.position.set(x+lx, baseY+ly, z+lz);
+    scene.add(leaves);
+   }
+  }
+ }
+}
+
+// place trees
+createTree(5,5);
+createTree(-5,-5);
+createTree(30,10);
+createTree(-30,-10);
+createTree(10,-30);
+createTree(-10,30);
 
 // ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
@@ -90,22 +134,21 @@ function animate(){
 
  const speed = 0.1;
 
- // get forward direction
+ // forward direction
  const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
 
- // 🔥 FIX: ignore up/down
+ // ignore vertical
  forward.y = 0;
  forward.normalize();
 
- // get right direction
+ // right direction
  const right = new THREE.Vector3();
  right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
  let moveX = 0;
  let moveZ = 0;
 
- // forward / backward
  if(keys.up){
   moveX += forward.x * speed;
   moveZ += forward.z * speed;
@@ -114,8 +157,6 @@ function animate(){
   moveX -= forward.x * speed;
   moveZ -= forward.z * speed;
  }
-
- // left / right
  if(keys.left){
   moveX -= right.x * speed;
   moveZ -= right.z * speed;
