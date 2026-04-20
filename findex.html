@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Clean Minecraft Movement</title>
+<title>Voxel Engine - Clean Rebuild</title>
 
 <style>
 body{margin:0;overflow:hidden;background:#000;}
@@ -11,23 +11,33 @@ body{margin:0;overflow:hidden;background:#000;}
  align-items:center;justify-content:center;
  color:white;background:#000;cursor:pointer;
 }
+#crosshair{
+ position:fixed;left:50%;top:50%;
+ width:10px;height:10px;transform:translate(-50%,-50%);
+}
+#crosshair:before,#crosshair:after{
+ content:"";position:absolute;background:white;
+}
+#crosshair:before{width:10px;height:2px;top:4px;}
+#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== BASIC SETUP =====
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+// ===== SCENE =====
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer = new THREE.WebGLRenderer();
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
@@ -37,40 +47,72 @@ light.position.set(10,20,10);
 scene.add(light);
 
 // ===== PLAYER =====
-const player = {
- width:0.6,
- height:1.8,
- depth:0.6
-};
+const player={width:0.6,height:1.8,depth:0.6};
+let velY=0,onGround=false;
 
-let velY = 0;
-let onGround = false;
-
-const gravity = -0.015;
-const jump = 0.25;
+const gravity=-0.015;
+const jump=0.25;
 
 // ===== WORLD =====
-const world = new Map();
-const key = (x,y,z)=>`${x},${y},${z}`;
+const CHUNK=16;
+const RENDER_DIST=2;
 
-// simple flat world
-for(let x=-20;x<20;x++){
- for(let z=-20;z<20;z++){
-  for(let y=-3;y<0;y++){
-   world.set(key(x,y,z),1);
-  }
- }
+const chunks=new Map();
+const world=new Map();
+
+const key=(x,y,z)=>`${x},${y},${z}`;
+const ckey=(x,z)=>`${x},${z}`;
+
+// ===== BLOCK =====
+const GEO=new THREE.BoxGeometry(1,1,1);
+const MAT=new THREE.MeshLambertMaterial({color:0x3cb043});
+
+// ===== NOISE =====
+function noise(x,z){
+ return (Math.sin(x*0.05)+Math.cos(z*0.05))*5;
 }
 
-// ===== BLOCK MESH =====
-const geo = new THREE.BoxGeometry(1,1,1);
-const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
+// ===== CREATE CHUNK =====
+function createChunk(cx,cz){
 
-for(let k of world.keys()){
- const [x,y,z]=k.split(",").map(Number);
- const m=new THREE.Mesh(geo,mat);
- m.position.set(x,y,z);
- scene.add(m);
+ const group=new THREE.Group();
+
+ for(let x=0;x<CHUNK;x++){
+  for(let z=0;z<CHUNK;z++){
+
+   let wx=cx*CHUNK+x;
+   let wz=cz*CHUNK+z;
+   let h=Math.floor(noise(wx,wz));
+
+   for(let y=-4;y<=h;y++){
+    const k=key(wx,y,wz);
+    world.set(k,1);
+
+    const m=new THREE.Mesh(GEO,MAT);
+    m.position.set(wx,y,wz);
+    group.add(m);
+   }
+  }
+ }
+
+ scene.add(group);
+ chunks.set(ckey(cx,cz),group);
+}
+
+// ===== LOAD CHUNKS =====
+function updateChunks(){
+
+ const cx=Math.floor(camera.position.x/CHUNK);
+ const cz=Math.floor(camera.position.z/CHUNK);
+
+ for(let x=-RENDER_DIST;x<=RENDER_DIST;x++){
+  for(let z=-RENDER_DIST;z<=RENDER_DIST;z++){
+   const id=ckey(cx+x,cz+z);
+   if(!chunks.has(id)){
+    createChunk(cx+x,cz+z);
+   }
+  }
+ }
 }
 
 // ===== COLLISION =====
@@ -96,7 +138,7 @@ function collide(px,py,pz){
  return false;
 }
 
-// ===== MOVEMENT =====
+// ===== MOVE =====
 function move(dx,dz){
 
  const steps=4;
@@ -106,13 +148,11 @@ function move(dx,dz){
   let sx=dx/steps;
   let sz=dz/steps;
 
-  // X
   let nx=camera.position.x+sx;
   if(!collide(nx,camera.position.y,camera.position.z)){
    camera.position.x=nx;
   }
 
-  // Z
   let nz=camera.position.z+sz;
   if(!collide(camera.position.x,camera.position.y,nz)){
    camera.position.z=nz;
@@ -160,6 +200,10 @@ scene.add(controls.getObject());
 
 overlay.onclick=()=>document.body.requestPointerLock();
 
+document.addEventListener("pointerlockchange",()=>{
+ overlay.style.display=document.pointerLockElement?"none":"flex";
+});
+
 // ===== INPUT =====
 const k={w:0,a:0,s:0,d:0};
 
@@ -169,7 +213,7 @@ onkeydown=e=>{
  if(e.code==="KeyA")k.a=1;
  if(e.code==="KeyD")k.d=1;
 
- if(e.code==="Space" && onGround){
+ if(e.code==="Space"&&onGround){
   velY=jump;
  }
 };
@@ -181,12 +225,55 @@ onkeyup=e=>{
  if(e.code==="KeyD")k.d=0;
 };
 
+// ===== BLOCK EDIT =====
+const ray=new THREE.Raycaster();
+
+addEventListener("mousedown",e=>{
+
+ ray.setFromCamera({x:0,y:0},camera);
+ const hits=ray.intersectObjects(scene.children,true);
+ if(!hits.length) return;
+
+ const hit=hits[0];
+ const p=hit.point.clone().floor();
+ const n=hit.face.normal.clone();
+
+ const bx=p.x,by=p.y,bz=p.z;
+
+ // BREAK
+ if(e.button===0){
+  const k=key(bx,by,bz);
+  if(world.has(k)){
+   world.delete(k);
+   location.reload();
+  }
+ }
+
+ // PLACE
+ if(e.button===2){
+
+  const px=bx+n.x;
+  const py=by+n.y;
+  const pz=bz+n.z;
+
+  if(collide(px+0.5,py+1,pz+0.5)) return;
+
+  world.set(key(px,py,pz),1);
+  location.reload();
+ }
+
+});
+
+addEventListener("contextmenu",e=>e.preventDefault());
+
 // ===== START =====
-camera.position.set(0,3,5);
+camera.position.set(0,5,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
+
+ updateChunks();
 
  const speed=0.12;
 
