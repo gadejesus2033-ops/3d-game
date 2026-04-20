@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - True Solid Blocks</title>
+<title>Voxel Engine - Fixed Movement + Solid Blocks</title>
 
 <style>
 body{margin:0;overflow:hidden;}
@@ -188,18 +188,18 @@ function unloadChunks(){
  }
 }
 
-// ===== FULL BODY COLLISION =====
+// ===== COLLISION =====
 function collide(px,py,pz){
 
- const hw=player.width/2;
- const hd=player.depth/2;
+ const hw = player.width/2;
+ const hd = player.depth/2;
 
- const minX=Math.floor(px-hw);
- const maxX=Math.floor(px+hw);
- const minY=Math.floor(py-player.height);
- const maxY=Math.floor(py-0.001);
- const minZ=Math.floor(pz-hd);
- const maxZ=Math.floor(pz+hd);
+ const minX = Math.floor(px - hw);
+ const maxX = Math.floor(px + hw);
+ const minY = Math.floor(py - player.height + 0.01);
+ const maxY = Math.floor(py - 0.01);
+ const minZ = Math.floor(pz - hd);
+ const maxZ = Math.floor(pz + hd);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
@@ -214,21 +214,21 @@ function collide(px,py,pz){
 // ===== MOVE =====
 function move(dx,dz){
 
- const steps=5;
+ const steps = 4;
 
  for(let i=0;i<steps;i++){
 
-  let sx=dx/steps;
-  let sz=dz/steps;
+  let sx = dx/steps;
+  let sz = dz/steps;
 
-  let nx=camera.position.x+sx;
-  if(!collide(nx,camera.position.y,camera.position.z)){
-   camera.position.x=nx;
+  let nx = camera.position.x + sx;
+  if(!collide(nx, camera.position.y, camera.position.z)){
+   camera.position.x = nx;
   }
 
-  let nz=camera.position.z+sz;
-  if(!collide(camera.position.x,camera.position.y,nz)){
-   camera.position.z=nz;
+  let nz = camera.position.z + sz;
+  if(!collide(camera.position.x, camera.position.y, nz)){
+   camera.position.z = nz;
   }
  }
 }
@@ -236,32 +236,32 @@ function move(dx,dz){
 // ===== GRAVITY =====
 function applyGravity(){
 
- velY+=gravity;
+ velY += gravity;
 
- let steps=Math.ceil(Math.abs(velY)/0.1);
- let stepY=velY/steps;
+ let steps = Math.ceil(Math.abs(velY)/0.1);
+ let stepY = velY / steps;
 
- onGround=false;
+ onGround = false;
 
  for(let i=0;i<steps;i++){
 
-  let ny=camera.position.y+stepY;
+  let ny = camera.position.y + stepY;
 
-  if(stepY<=0){
-   if(collide(camera.position.x,ny,camera.position.z)){
-    camera.position.y=Math.floor(camera.position.y);
-    velY=0;
-    onGround=true;
+  if(stepY <= 0){
+   if(collide(camera.position.x, ny, camera.position.z)){
+    camera.position.y = Math.floor(camera.position.y);
+    velY = 0;
+    onGround = true;
     break;
    } else {
-    camera.position.y=ny;
+    camera.position.y = ny;
    }
   } else {
-   if(collide(camera.position.x,ny,camera.position.z)){
-    velY=0;
+   if(collide(camera.position.x, ny, camera.position.z)){
+    velY = 0;
     break;
    } else {
-    camera.position.y=ny;
+    camera.position.y = ny;
    }
   }
  }
@@ -328,14 +328,13 @@ addEventListener("mousedown",e=>{
   }
  }
 
- // PLACE (now fully solid-safe)
+ // PLACE
  if(e.button===2){
 
   const px=bx+n.x;
   const py=by+n.y;
   const pz=bz+n.z;
 
-  // prevent placing inside player
   if(collide(px+0.5,py+1,pz+0.5)) return;
 
   const pcx=Math.floor(px/CHUNK);
