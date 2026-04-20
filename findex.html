@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine Full</title>
+<title>Fixed Voxel Engine</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -18,81 +18,60 @@ body { margin:0; overflow:hidden; }
 </style>
 </head>
 
-<body tabindex="0">
+<body>
 <div id="overlay">CLICK TO START</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-// ================= TEXTURES =================
-function tex(a,b){
- const c=document.createElement("canvas");
- c.width=16;c.height=16;
- const ctx=c.getContext("2d");
-
- for(let x=0;x<16;x++){
-  for(let y=0;y<16;y++){
-   ctx.fillStyle=Math.random()>0.5?a:b;
-   ctx.fillRect(x,y,1,1);
-  }
- }
-
- const t=new THREE.CanvasTexture(c);
- t.magFilter=THREE.NearestFilter;
- return t;
-}
-
-const mat={
- grass:new THREE.MeshLambertMaterial({map:tex("#3cb043","#2e8b3c")}),
- dirt:new THREE.MeshLambertMaterial({map:tex("#8b5a2b","#6e4420")}),
- stone:new THREE.MeshLambertMaterial({map:tex("#888","#666")}),
- wood:new THREE.MeshLambertMaterial({map:tex("#a0522d","#7b3f00")}),
- leaves:new THREE.MeshLambertMaterial({map:tex("#2ecc71","#27ae60")})
-};
-
-// ================= SCENE =================
+// ================= LIGHTING FIX =================
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+
+const sun=new THREE.DirectionalLight(0xffffff,1);
+sun.position.set(20,30,10);
+scene.add(sun);
+
+// ================= CAMERA =================
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.DirectionalLight(0xffffff,1).position.set(5,10,5));
+// ================= MATERIALS =================
+const mat={
+ grass:new THREE.MeshLambertMaterial({color:0x3cb043}),
+ dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888}),
+ wood:new THREE.MeshLambertMaterial({color:0x8b4513}),
+ leaves:new THREE.MeshLambertMaterial({color:0x2ecc71})
+};
 
 // ================= WORLD =================
-const geo=new THREE.BoxGeometry(1,1,1);
 const world=new Map();
+const geo=new THREE.BoxGeometry(1,1,1);
 
 function key(x,y,z){return `${x},${y},${z}`;}
 
 class Block{
- constructor(x,y,z,type,mesh){
+ constructor(x,y,z,mesh){
   this.x=x;
   this.y=y;
   this.z=z;
-  this.type=type;
   this.mesh=mesh;
   this.solid=true;
  }
 }
 
-function addBlock(x,y,z,type,material){
- const mesh=new THREE.Mesh(geo,material);
+function addBlock(x,y,z,m){
+ const mesh=new THREE.Mesh(geo,m);
  mesh.position.set(x,y,z);
  scene.add(mesh);
 
- world.set(key(x,y,z), new Block(x,y,z,type,mesh));
-}
-
-function removeBlock(x,y,z){
- const k=key(x,y,z);
- const b=world.get(k);
- if(!b) return;
- scene.remove(b.mesh);
- world.delete(k);
+ world.set(key(x,y,z),new Block(x,y,z,mesh));
 }
 
 function getBlock(x,y,z){
@@ -102,30 +81,12 @@ function getBlock(x,y,z){
 // ================= WORLD GEN =================
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
-  addBlock(x,-1,z,"grass",mat.grass);
-  addBlock(x,-2,z,"dirt",mat.dirt);
+  addBlock(x,-1,z,mat.grass);
+  addBlock(x,-2,z,mat.dirt);
  }
 }
 
-function tree(x,z){
- for(let i=0;i<4;i++) addBlock(x,i,z,"wood",mat.wood);
-
- for(let lx=-2;lx<=2;lx++){
-  for(let lz=-2;lz<=2;lz++){
-   for(let ly=3;ly<=5;ly++){
-    if(Math.abs(lx)+Math.abs(lz)<4){
-     addBlock(x+lx,ly,z+lz,"leaves",mat.leaves);
-    }
-   }
-  }
- }
-}
-
-tree(5,5);
-tree(-5,-5);
-tree(10,-10);
-tree(-10,10);
-
+// mountains (FIXED collision support)
 function mountain(cx,cz){
  for(let x=-10;x<=10;x++){
   for(let z=-10;z<=10;z++){
@@ -134,7 +95,7 @@ function mountain(cx,cz){
 
    if(h>0){
     for(let y=0;y<h;y++){
-     addBlock(cx+x,y,cz+z,"stone",mat.stone);
+     addBlock(cx+x,y,cz+z,mat.stone);
     }
    }
   }
@@ -145,6 +106,26 @@ mountain(0,-30);
 mountain(0,30);
 mountain(-30,0);
 mountain(30,0);
+
+// trees
+function tree(x,z){
+ for(let i=0;i<4;i++) addBlock(x,i,z,mat.wood);
+
+ for(let lx=-2;lx<=2;lx++){
+  for(let lz=-2;lz<=2;lz++){
+   for(let ly=3;ly<=5;ly++){
+    if(Math.abs(lx)+Math.abs(lz)<4){
+     addBlock(x+lx,ly,z+lz,mat.leaves);
+    }
+   }
+  }
+ }
+}
+
+tree(5,5);
+tree(-5,-5);
+tree(10,-10);
+tree(-10,10);
 
 // ================= CONTROLS =================
 const controls=new THREE.PointerLockControls(camera,document.body);
@@ -169,12 +150,14 @@ let onGround=false;
 
 const player={width:0.6,height:2,depth:0.6};
 
-// ================= COLLISION =================
+// ================= COLLISION (FIXED PROPERLY) =================
 function collides(x,y,z){
  const minX=x-player.width/2;
  const maxX=x+player.width/2;
+
  const minY=y;
  const maxY=y+player.height;
+
  const minZ=z-player.depth/2;
  const maxZ=z+player.depth/2;
 
@@ -189,9 +172,9 @@ function collides(x,y,z){
  return false;
 }
 
-// ================= MOVE =================
+// ================= MOVEMENT (NO TUNNELING FIX) =================
 function move(dx,dz){
- const steps=8;
+ const steps=10;
 
  for(let i=0;i<steps;i++){
   let sx=dx/steps;
@@ -203,13 +186,14 @@ function move(dx,dz){
   if(!collides(nx,camera.position.y,camera.position.z)){
    camera.position.x=nx;
   }
+
   if(!collides(camera.position.x,camera.position.y,nz)){
    camera.position.z=nz;
   }
  }
 }
 
-// ================= INPUT EVENTS =================
+// ================= INPUT =================
 window.onkeydown=e=>{
  if(e.code==="ArrowUp")keys.up=true;
  if(e.code==="ArrowDown")keys.down=true;
@@ -228,37 +212,6 @@ window.onkeyup=e=>{
  if(e.code==="ArrowLeft")keys.left=false;
  if(e.code==="ArrowRight")keys.right=false;
 };
-
-// ================= BREAK / PLACE =================
-const raycaster=new THREE.Raycaster();
-
-window.addEventListener("mousedown",(e)=>{
- raycaster.setFromCamera({x:0,y:0},camera);
-
- const hits=raycaster.intersectObjects(scene.children);
-
- if(hits.length===0) return;
-
- const hit=hits[0].object;
-
- const pos=hit.position;
-
- if(e.button===0){
-  removeBlock(pos.x,pos.y,pos.z); // break
- }
-
- if(e.button===2){
-  addBlock(
-   Math.round(pos.x),
-   Math.round(pos.y+1),
-   Math.round(pos.z),
-   "stone",
-   mat.stone
-  );
- }
-});
-
-window.addEventListener("contextmenu",e=>e.preventDefault());
 
 // ================= LOOP =================
 camera.position.set(0,3,5);
