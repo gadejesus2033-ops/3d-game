@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Walkable Terrain</title>
+<title>Fixed Walking Terrain</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -33,30 +33,24 @@ body{margin:0;overflow:hidden;background:black;}
 <script>
 
 // =====================
-// 🎮 ENGINE (LOCKED)
+// ENGINE
 // =====================
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer = new THREE.WebGLRenderer();
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
 
 // controls
-const controls = new THREE.PointerLockControls(camera, document.body);
+const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-const overlay = document.getElementById("overlay");
-
-overlay.onclick = () => {
- controls.lock();
- document.body.focus();
-};
-
+const overlay=document.getElementById("overlay");
+overlay.onclick=()=>controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
@@ -66,61 +60,44 @@ document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
 
 // =====================
-// 🌍 TERRAIN SYSTEM
+// WORLD
 // =====================
+const world=new Map();
+const geo=new THREE.BoxGeometry(1,1,1);
+const mat=new THREE.MeshLambertMaterial({color:0x3cb043});
 
-const world = new Map();
+function key(x,y,z){return `${x},${y},${z}`;}
 
-function key(x,y,z){
- return `${x},${y},${z}`;
-}
-
-// height function
 function height(x,z){
- return Math.floor(
-  Math.sin(x*0.2)*2 +
-  Math.cos(z*0.2)*2
- );
+ return Math.floor(Math.sin(x*0.2)*2 + Math.cos(z*0.2)*2);
 }
-
-// blocks
-const geo = new THREE.BoxGeometry(1,1,1);
-const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
 
 // build terrain
 for(let x=-30;x<30;x++){
  for(let z=-30;z<30;z++){
-
-  let h = height(x,z);
-
+  let h=height(x,z);
   for(let y=-3;y<=h;y++){
-
-   const k = key(x,y,z);
-   world.set(k,1);
-
-   const block = new THREE.Mesh(geo,mat);
-   block.position.set(x,y,z);
-   scene.add(block);
+   world.set(key(x,y,z),1);
+   const b=new THREE.Mesh(geo,mat);
+   b.position.set(x,y,z);
+   scene.add(b);
   }
  }
 }
 
 // =====================
-// 🧱 COLLISION (NEW)
+// COLLISION (correct)
 // =====================
-
 function collide(px,py,pz){
 
- const size = 0.3;
+ const size=0.3;
 
- const minX = Math.floor(px - size);
- const maxX = Math.floor(px + size);
-
- const minY = Math.floor(py - 1.8);
- const maxY = Math.floor(py);
-
- const minZ = Math.floor(pz - size);
- const maxZ = Math.floor(pz + size);
+ const minX=Math.floor(px-size);
+ const maxX=Math.floor(px+size);
+ const minY=Math.floor(py-1.8);
+ const maxY=Math.floor(py);
+ const minZ=Math.floor(pz-size);
+ const maxZ=Math.floor(pz+size);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
@@ -133,30 +110,54 @@ function collide(px,py,pz){
 }
 
 // =====================
-// 🚶 MOVEMENT (LOCKED)
+// MOVEMENT (FIXED MINECRAFT STYLE)
 // =====================
-
 camera.position.set(0,5,10);
+
+function canMove(nx,ny,nz){
+ return !collide(nx,ny,nz);
+}
 
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.15;
+ const speed=0.15;
 
- if(keys["KeyW"]) controls.moveForward(speed);
- if(keys["KeyS"]) controls.moveForward(-speed);
- if(keys["KeyA"]) controls.moveRight(-speed);
- if(keys["KeyD"]) controls.moveRight(speed);
+ const forward=new THREE.Vector3();
+ camera.getWorldDirection(forward);
+ forward.y=0;
+ forward.normalize();
 
- // =====================
- // 🧱 FIX COLLISION (STOP WALKING THROUGH LAND)
- // =====================
+ const right=new THREE.Vector3();
+ right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- let pos = camera.position.clone();
+ let nx=camera.position.x;
+ let nz=camera.position.z;
 
- if(collide(pos.x,pos.y,pos.z)){
-  // simple correction: push player up slightly
-  camera.position.y += 0.2;
+ if(keys["KeyW"]){
+  nx += forward.x*speed;
+  nz += forward.z*speed;
+ }
+ if(keys["KeyS"]){
+  nx -= forward.x*speed;
+  nz -= forward.z*speed;
+ }
+ if(keys["KeyA"]){
+  nx -= right.x*speed;
+  nz -= right.z*speed;
+ }
+ if(keys["KeyD"]){
+  nx += right.x*speed;
+  nz += right.z*speed;
+ }
+
+ // ✔ ONLY MOVE IF VALID
+ if(canMove(nx,camera.position.y,camera.position.z)){
+  camera.position.x = nx;
+ }
+
+ if(canMove(camera.position.x,camera.position.y,nz)){
+  camera.position.z = nz;
  }
 
  renderer.render(scene,camera);
