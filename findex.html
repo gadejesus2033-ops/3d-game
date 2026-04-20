@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Walkable World</title>
+<title>Visible Floor + Movement</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -10,21 +10,11 @@ body{margin:0;overflow:hidden;background:black;}
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;cursor:pointer;
 }
-#crosshair{
- position:fixed;left:50%;top:50%;
- width:10px;height:10px;transform:translate(-50%,-50%);
-}
-#crosshair:before,#crosshair:after{
- content:"";position:absolute;background:white;
-}
-#crosshair:before{width:10px;height:2px;top:4px;}
-#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
-<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
@@ -35,19 +25,20 @@ body{margin:0;overflow:hidden;background:black;}
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+// camera
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+
+// renderer
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth,innerHeight);
+renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff));
-
-// ===== FLOOR (WHAT YOU WALK ON) =====
+// ===== FLOOR (VERY VISIBLE) =====
 const floor = new THREE.Mesh(
- new THREE.BoxGeometry(200,2,200),
- new THREE.MeshLambertMaterial({color:0x3cb043})
+ new THREE.BoxGeometry(200, 1, 200),
+ new THREE.MeshBasicMaterial({ color: 0x00ff00 }) // bright green
 );
-floor.position.y = -1;
+floor.position.set(0, -1, 0);
 scene.add(floor);
 
 // ===== CONTROLS =====
@@ -81,8 +72,10 @@ document.addEventListener("keyup", e => {
  if(e.code==="KeyD") right=false;
 });
 
-// ===== START =====
-camera.position.set(0,2,5);
+// ===== START POSITION =====
+// IMPORTANT: look slightly DOWN so you SEE the floor
+camera.position.set(0, 2, 5);
+camera.rotation.x = -0.3;
 
 // ===== LOOP =====
 function animate(){
@@ -95,7 +88,10 @@ function animate(){
  if(left) controls.moveRight(-speed);
  if(right) controls.moveRight(speed);
 
- renderer.render(scene,camera);
+ // stay on ground
+ camera.position.y = 2;
+
+ renderer.render(scene, camera);
 }
 
 animate();
