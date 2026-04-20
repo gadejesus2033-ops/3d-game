@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Look Movement</title>
+<title>Movement Guaranteed</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -21,7 +21,7 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// ===== SETUP =====
+// ===== SCENE =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
@@ -34,7 +34,7 @@ scene.add(new THREE.AmbientLight(0xffffff));
 
 // floor
 const floor = new THREE.Mesh(
- new THREE.BoxGeometry(50,1,50),
+ new THREE.BoxGeometry(100,1,100),
  new THREE.MeshBasicMaterial({color:0x00ff00})
 );
 floor.position.y = -1;
@@ -48,38 +48,47 @@ const overlay = document.getElementById("overlay");
 
 overlay.onclick = () => controls.lock();
 
-controls.addEventListener("lock", () => overlay.style.display="none");
-controls.addEventListener("unlock", () => overlay.style.display="flex");
+controls.addEventListener("lock", () => {
+ overlay.style.display="none";
+});
+
+controls.addEventListener("unlock", () => {
+ overlay.style.display="flex";
+});
 
 // ===== INPUT =====
-const keys = {};
-document.addEventListener("keydown", e => keys[e.code]=true);
-document.addEventListener("keyup", e => keys[e.code]=false);
+let moveForward = false;
+let moveBackward = false;
+let moveLeft = false;
+let moveRight = false;
 
-// start position
+document.addEventListener("keydown", e => {
+ if(e.code==="KeyW") moveForward = true;
+ if(e.code==="KeyS") moveBackward = true;
+ if(e.code==="KeyA") moveLeft = true;
+ if(e.code==="KeyD") moveRight = true;
+});
+
+document.addEventListener("keyup", e => {
+ if(e.code==="KeyW") moveForward = false;
+ if(e.code==="KeyS") moveBackward = false;
+ if(e.code==="KeyA") moveLeft = false;
+ if(e.code==="KeyD") moveRight = false;
+});
+
+// start
 camera.position.set(0,2,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.12;
+ const speed = 0.1;
 
- // direction you are LOOKING
- const dir = new THREE.Vector3();
- camera.getWorldDirection(dir);
- dir.y = 0; // stay on ground
- dir.normalize();
-
- // right/left movement
- const right = new THREE.Vector3();
- right.crossVectors(dir, new THREE.Vector3(0,1,0)).normalize();
-
- // movement
- if(keys["KeyW"]) camera.position.addScaledVector(dir, speed);
- if(keys["KeyS"]) camera.position.addScaledVector(dir, -speed);
- if(keys["KeyA"]) camera.position.addScaledVector(right, -speed);
- if(keys["KeyD"]) camera.position.addScaledVector(right, speed);
+ if(moveForward) controls.moveForward(speed);
+ if(moveBackward) controls.moveForward(-speed);
+ if(moveLeft) controls.moveRight(-speed);
+ if(moveRight) controls.moveRight(speed);
 
  renderer.render(scene,camera);
 }
