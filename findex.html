@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Engine Fixed</title>
+<title>Minecraft Stable</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -53,6 +53,7 @@ const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
 const overlay=document.getElementById("overlay");
+
 overlay.onclick=()=>controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
@@ -99,6 +100,7 @@ function height(x,z){
 
 for(let x=-50;x<50;x++){
  for(let z=-50;z<50;z++){
+
   let h=height(x,z);
 
   for(let y=-5;y<=h;y++){
@@ -126,22 +128,6 @@ function collide(px,py,pz){
  }}}
 
  return false;
-}
-
-// ===== STEP UP (fixes getting stuck) =====
-function tryMove(nx,nz){
-
- // normal move
- if(!collide(nx,camera.position.y-PLAYER_HEIGHT,nz)){
-  return {x:nx,y:camera.position.y,z:nz};
- }
-
- // try stepping up 1 block
- if(!collide(nx,camera.position.y-PLAYER_HEIGHT+1,nz)){
-  return {x:nx,y:camera.position.y+1,z:nz};
- }
-
- return null;
 }
 
 // ===== PHYSICS =====
@@ -183,20 +169,22 @@ function animate(){
  if(keys["KeyA"]){dx-=right.x*speed;dz-=right.z*speed;}
  if(keys["KeyD"]){dx+=right.x*speed;dz+=right.z*speed;}
 
- let result=tryMove(camera.position.x+dx,camera.position.z+dz);
+ // ===== XZ MOVEMENT (fixed) =====
+ let nx=camera.position.x+dx;
+ let nz=camera.position.z+dz;
 
- if(result){
-  camera.position.x=result.x;
-  camera.position.z=result.z;
-  camera.position.y=result.y;
+ if(!collide(nx,camera.position.y-PLAYER_HEIGHT,camera.position.z)){
+  camera.position.x=nx;
  }
 
- // ===== GRAVITY =====
- velY+=gravity;
+ if(!collide(camera.position.x,camera.position.y-PLAYER_HEIGHT,nz)){
+  camera.position.z=nz;
+ }
 
+ // ===== GRAVITY (fixed) =====
+ velY+=gravity;
  let ny=camera.position.y+velY;
 
- // falling
  if(velY<=0){
   if(collide(camera.position.x,ny-PLAYER_HEIGHT,camera.position.z)){
    camera.position.y=Math.floor(ny)+PLAYER_HEIGHT;
@@ -206,12 +194,12 @@ function animate(){
    camera.position.y=ny;
    onGround=false;
   }
- } 
- // going up
- else {
+ } else {
   if(!collide(camera.position.x,ny,camera.position.z)){
    camera.position.y=ny;
-  } else velY=0;
+  } else {
+   velY=0;
+  }
  }
 
  renderer.render(scene,camera);
