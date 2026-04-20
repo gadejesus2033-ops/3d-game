@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Movement Works</title>
+<title>Movement FIX</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -10,27 +10,33 @@ body{margin:0;overflow:hidden;background:black;}
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;cursor:pointer;
 }
+#debug{
+ position:absolute;top:10px;left:10px;
+ color:white;font-family:monospace;
+}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
+<div id="debug">Keys: none</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== SETUP =====
+const debug = document.getElementById("debug");
+
+// ===== SCENE =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// light
 scene.add(new THREE.AmbientLight(0xffffff));
 
 // floor
@@ -47,7 +53,10 @@ scene.add(controls.getObject());
 
 const overlay = document.getElementById("overlay");
 
-overlay.onclick = () => controls.lock();
+overlay.onclick = () => {
+ controls.lock();
+ window.focus();
+};
 
 controls.addEventListener("lock", () => {
  overlay.style.display = "none";
@@ -60,32 +69,31 @@ controls.addEventListener("unlock", () => {
 // ===== INPUT =====
 const keys = {};
 
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+document.addEventListener("keydown", e => {
+ keys[e.code] = true;
+ debug.innerText = "Keys: " + Object.keys(keys).filter(k=>keys[k]).join(", ");
+});
 
-// start position
+document.addEventListener("keyup", e => {
+ keys[e.code] = false;
+ debug.innerText = "Keys: " + Object.keys(keys).filter(k=>keys[k]).join(", ");
+});
+
+// ===== START =====
 camera.position.set(0,2,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.12;
+ const speed = 0.15;
 
- const dir = new THREE.Vector3();
- camera.getWorldDirection(dir);
- dir.y = 0;
- dir.normalize();
+ if(keys["KeyW"]) camera.position.z -= speed;
+ if(keys["KeyS"]) camera.position.z += speed;
+ if(keys["KeyA"]) camera.position.x -= speed;
+ if(keys["KeyD"]) camera.position.x += speed;
 
- const right = new THREE.Vector3();
- right.crossVectors(dir, new THREE.Vector3(0,1,0)).normalize();
-
- if(keys["KeyW"]) camera.position.addScaledVector(dir, speed);
- if(keys["KeyS"]) camera.position.addScaledVector(dir, -speed);
- if(keys["KeyA"]) camera.position.addScaledVector(right, -speed);
- if(keys["KeyD"]) camera.position.addScaledVector(right, speed);
-
- renderer.render(scene, camera);
+ renderer.render(scene,camera);
 }
 
 animate();
