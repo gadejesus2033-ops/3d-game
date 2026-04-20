@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Style Movement</title>
+<title>Correct Movement</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -10,169 +10,78 @@ body{margin:0;overflow:hidden;background:black;}
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;cursor:pointer;
 }
+#crosshair{
+ position:fixed;left:50%;top:50%;
+ width:10px;height:10px;transform:translate(-50%,-50%);
+}
+#crosshair:before,#crosshair:after{
+ content:"";position:absolute;background:white;
+}
+#crosshair:before{width:10px;height:2px;top:4px;}
+#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== SCENE =====
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x87ceeb);
+// ===== SETUP =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
 
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer=new THREE.WebGLRenderer();
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff,0.6));
-const light=new THREE.DirectionalLight(0xffffff,1);
-light.position.set(10,20,10);
-scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff));
 
 // ===== CONTROLS =====
-const controls=new THREE.PointerLockControls(camera,document.body);
+const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
-const overlay=document.getElementById("overlay");
-overlay.onclick=()=>controls.lock();
+const overlay = document.getElementById("overlay");
+
+overlay.onclick = () => controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
-// ===== PLAYER =====
-const player = {
- width:0.6,
- height:1.8,
- depth:0.6
-};
-
-let velY = 0;
-let onGround = false;
-
-const gravity = -0.02;
-const jump = 0.32;
-
-// ===== WORLD =====
-const blocks=new Map();
-const key=(x,y,z)=>`${x},${y},${z}`;
-
-// terrain
-for(let x=-20;x<20;x++){
- for(let z=-20;z<20;z++){
-  let h=Math.floor(Math.sin(x*0.2)*2 + Math.cos(z*0.2)*2);
-
-  for(let y=-5;y<=h;y++){
-   blocks.set(key(x,y,z),1);
-
-   const cube=new THREE.Mesh(
-    new THREE.BoxGeometry(1,1,1),
-    new THREE.MeshLambertMaterial({color:0x3cb043})
-   );
-   cube.position.set(x,y,z);
-   scene.add(cube);
-  }
- }
-}
-
-// ===== COLLISION =====
-function collide(px,py,pz){
-
- const hw=player.width/2;
- const hd=player.depth/2;
-
- const minX=Math.floor(px-hw);
- const maxX=Math.floor(px+hw);
- const minY=Math.floor(py-player.height+0.001);
- const maxY=Math.floor(py-0.001);
- const minZ=Math.floor(pz-hd);
- const maxZ=Math.floor(pz+hd);
-
- for(let x=minX;x<=maxX;x++){
-  for(let y=minY;y<=maxY;y++){
-   for(let z=minZ;z<=maxZ;z++){
-    if(blocks.has(key(x,y,z))) return true;
-   }
-  }
- }
- return false;
-}
-
 // ===== INPUT =====
-const k={};
+const keys = {};
 
-document.addEventListener("keydown",e=>{
- k[e.code]=true;
-
- if(e.code==="Space" && onGround){
-  velY = jump;
- }
-});
-
-document.addEventListener("keyup",e=>k[e.code]=false);
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
 
 // ===== START =====
-camera.position.set(0,5,5);
+camera.position.set(0,2,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed=0.12;
+ const speed = 0.12;
 
- // direction you look
- const forward=new THREE.Vector3();
+ // direction you're looking
+ const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
- forward.y=0;
+ forward.y = 0;
  forward.normalize();
 
- const right=new THREE.Vector3();
- right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
+ // sideways
+ const right = new THREE.Vector3();
+ right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
- // ===== HORIZONTAL (Minecraft style) =====
- let dx=0,dz=0;
-
- if(k["KeyW"]){dx+=forward.x*speed;dz+=forward.z*speed;}
- if(k["KeyS"]){dx-=forward.x*speed;dz-=forward.z*speed;}
- if(k["KeyA"]){dx-=right.x*speed;dz-=right.z*speed;}
- if(k["KeyD"]){dx+=right.x*speed;dz+=right.z*speed;}
-
- // X axis
- let nx=camera.position.x+dx;
- if(!collide(nx,camera.position.y,camera.position.z)){
-  camera.position.x=nx;
- }
-
- // Z axis
- let nz=camera.position.z+dz;
- if(!collide(camera.position.x,camera.position.y,nz)){
-  camera.position.z=nz;
- }
-
- // ===== VERTICAL (separate like Minecraft) =====
- velY += gravity;
- let ny=camera.position.y+velY;
-
- if(velY<=0){
-  if(collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y=Math.floor(camera.position.y);
-   velY=0;
-   onGround=true;
-  } else {
-   camera.position.y=ny;
-   onGround=false;
-  }
- } else {
-  if(collide(camera.position.x,ny,camera.position.z)){
-   velY=0;
-  } else {
-   camera.position.y=ny;
-  }
- }
+ // movement
+ if(keys["KeyW"]) camera.position.addScaledVector(forward, speed);
+ if(keys["KeyS"]) camera.position.addScaledVector(forward, -speed);
+ if(keys["KeyA"]) camera.position.addScaledVector(right, -speed);
+ if(keys["KeyD"]) camera.position.addScaledVector(right, speed);
 
  renderer.render(scene,camera);
 }
