@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft 8x8 Texture World</title>
+<title>Minecraft Clean Build</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -11,23 +11,17 @@ body{margin:0;overflow:hidden;background:black;}
  position:absolute;inset:0;
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;
- cursor:pointer;
- background:black;
+ cursor:pointer;background:black;
 }
 
 #crosshair{
- position:fixed;
- left:50%;top:50%;
+ position:fixed;left:50%;top:50%;
  width:10px;height:10px;
  transform:translate(-50%,-50%);
 }
-
 #crosshair:before,#crosshair:after{
- content:"";
- position:absolute;
- background:white;
+ content:"";position:absolute;background:white;
 }
-
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
 </style>
@@ -42,10 +36,7 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// =====================
-// ENGINE
-// =====================
-
+// ===== ENGINE =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
@@ -57,68 +48,48 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
 
-// =====================
-// CONTROLS
-// =====================
-
+// ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
-document.getElementById("overlay").onclick = () => controls.lock();
+const overlay = document.getElementById("overlay");
 
-// =====================
-// INPUT
-// =====================
+overlay.onclick = () => controls.lock();
 
+controls.addEventListener("lock",()=>overlay.style.display="none");
+controls.addEventListener("unlock",()=>overlay.style.display="flex");
+
+// ===== INPUT =====
 const keys={};
-
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
 
-// =====================
-// 🧱 8x8 TEXTURE CREATION
-// =====================
-
-function create8x8Texture(){
-
- const canvas = document.createElement("canvas");
- canvas.width = 8;
- canvas.height = 8;
-
- const ctx = canvas.getContext("2d");
+// ===== 8x8 TEXTURE =====
+function makeTexture(){
+ const c=document.createElement("canvas");
+ c.width=8;c.height=8;
+ const ctx=c.getContext("2d");
 
  for(let x=0;x<8;x++){
   for(let y=0;y<8;y++){
-
-   // simple Minecraft-style noise pattern
-   const shade = Math.floor(120 + Math.random()*80);
-
-   ctx.fillStyle = `rgb(${shade},${shade+30},${shade-20})`;
+   let s=100+Math.random()*80;
+   ctx.fillStyle=`rgb(${s},${s+30},${s-20})`;
    ctx.fillRect(x,y,1,1);
   }
  }
 
- const texture = new THREE.CanvasTexture(canvas);
- texture.magFilter = THREE.NearestFilter;
- texture.minFilter = THREE.NearestFilter;
-
- return texture;
+ const t=new THREE.CanvasTexture(c);
+ t.magFilter=THREE.NearestFilter;
+ t.minFilter=THREE.NearestFilter;
+ return t;
 }
 
-const blockTexture = create8x8Texture();
+const material=new THREE.MeshLambertMaterial({map:makeTexture()});
+const geo=new THREE.BoxGeometry(1,1,1);
 
-const blockMat = new THREE.MeshLambertMaterial({map:blockTexture});
-const geo = new THREE.BoxGeometry(1,1,1);
-
-// =====================
-// WORLD
-// =====================
-
-const world = new Map();
-
-function key(x,y,z){
- return `${x},${y},${z}`;
-}
+// ===== WORLD =====
+const world=new Map();
+const key=(x,y,z)=>`${x},${y},${z}`;
 
 function height(x,z){
  return Math.floor(
@@ -128,127 +99,110 @@ function height(x,z){
  );
 }
 
-// terrain
-for(let x=-60;x<60;x++){
- for(let z=-60;z<60;z++){
+for(let x=-50;x<50;x++){
+ for(let z=-50;z<50;z++){
 
-  let h = height(x,z);
+  let h=height(x,z);
 
   for(let y=-5;y<=h;y++){
    world.set(key(x,y,z),1);
 
-   const block = new THREE.Mesh(geo,blockMat);
+   const block=new THREE.Mesh(geo,material);
    block.position.set(x,y,z);
    scene.add(block);
   }
  }
 }
 
-// =====================
-// COLLISION
-// =====================
-
+// ===== COLLISION =====
 function collide(px,py,pz){
 
  const s=0.3;
 
- const minX=Math.floor(px-s);
- const maxX=Math.floor(px+s);
- const minY=Math.floor(py-1.8);
- const maxY=Math.floor(py);
- const minZ=Math.floor(pz-s);
- const maxZ=Math.floor(pz+s);
+ for(let x=Math.floor(px-s);x<=Math.floor(px+s);x++){
+ for(let y=Math.floor(py-1.8);y<=Math.floor(py);y++){
+ for(let z=Math.floor(pz-s);z<=Math.floor(pz+s);z++){
 
- for(let x=minX;x<=maxX;x++){
-  for(let y=minY;y<=maxY;y++){
-   for(let z=minZ;z<=maxZ;z++){
-    if(world.has(key(x,y,z))) return true;
-   }
-  }
- }
+  if(world.has(key(x,y,z))) return true;
+
+ }}}
 
  return false;
 }
 
-// =====================
-// PHYSICS
-// =====================
+// ===== PHYSICS =====
+let velY=0;
+let onGround=false;
 
-let velY = 0;
-let onGround = false;
+const gravity=-0.02;
+const jump=0.35;
 
-const gravity = -0.02;
-const jumpPower = 0.35;
-
+// spawn
 camera.position.set(0,10,10);
 
 // jump
 document.addEventListener("keydown",e=>{
  if(e.code==="Space" && onGround){
-  velY = jumpPower;
-  onGround = false;
+  velY=jump;
+  onGround=false;
  }
 });
 
-// =====================
-// LOOP
-// =====================
-
+// ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.15;
+ const speed=0.15;
 
- const forward = new THREE.Vector3();
+ const forward=new THREE.Vector3();
  camera.getWorldDirection(forward);
- forward.y = 0;
+ forward.y=0;
  forward.normalize();
 
- const right = new THREE.Vector3();
+ const right=new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- let nx = camera.position.x;
- let nz = camera.position.z;
+ let nx=camera.position.x;
+ let nz=camera.position.z;
 
- if(keys["KeyW"]){nx += forward.x * speed; nz += forward.z * speed;}
- if(keys["KeyS"]){nx -= forward.x * speed; nz -= forward.z * speed;}
- if(keys["KeyA"]){nx -= right.x * speed; nz -= right.z * speed;}
- if(keys["KeyD"]){nx += right.x * speed; nz += right.z * speed;}
+ if(keys["KeyW"]){nx+=forward.x*speed;nz+=forward.z*speed;}
+ if(keys["KeyS"]){nx-=forward.x*speed;nz-=forward.z*speed;}
+ if(keys["KeyA"]){nx-=right.x*speed;nz-=right.z*speed;}
+ if(keys["KeyD"]){nx+=right.x*speed;nz+=right.z*speed;}
 
- if(!collide(nx,camera.position.y,camera.position.z)){
-  camera.position.x = nx;
- }
-
- if(!collide(camera.position.x,camera.position.y,nz)){
-  camera.position.z = nz;
- }
+ if(!collide(nx,camera.position.y,camera.position.z)) camera.position.x=nx;
+ if(!collide(camera.position.x,camera.position.y,nz)) camera.position.z=nz;
 
  // gravity
- velY += gravity;
+ velY+=gravity;
+ let ny=camera.position.y+velY;
 
- let ny = camera.position.y + velY;
-
- if(velY <= 0){
+ if(velY<=0){
   if(collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y = Math.floor(camera.position.y);
-   velY = 0;
-   onGround = true;
+   camera.position.y=Math.floor(camera.position.y);
+   velY=0;
+   onGround=true;
   } else {
-   camera.position.y = ny;
-   onGround = false;
+   camera.position.y=ny;
+   onGround=false;
   }
  } else {
   if(!collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y = ny;
-  } else {
-   velY = 0;
-  }
+   camera.position.y=ny;
+  } else velY=0;
  }
 
  renderer.render(scene,camera);
 }
 
 animate();
+
+// resize
+window.addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
 
 </script>
 </body>
