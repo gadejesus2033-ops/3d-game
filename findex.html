@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Correct Movement</title>
+<title>Guaranteed Movement</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -10,28 +10,21 @@ body{margin:0;overflow:hidden;background:black;}
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;cursor:pointer;
 }
-#crosshair{
- position:fixed;left:50%;top:50%;
- width:10px;height:10px;transform:translate(-50%,-50%);
-}
-#crosshair:before,#crosshair:after{
- content:"";position:absolute;background:white;
-}
-#crosshair:before{width:10px;height:2px;top:4px;}
-#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
-<body>
+<body tabindex="0">
 <div id="overlay">CLICK TO START</div>
-<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== SETUP =====
+// FORCE focus
+document.body.focus();
+
+// ===== SCENE =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
@@ -42,46 +35,58 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
 
+// floor
+const floor = new THREE.Mesh(
+ new THREE.BoxGeometry(100,1,100),
+ new THREE.MeshBasicMaterial({color:0x00ff00})
+);
+floor.position.y = -1;
+scene.add(floor);
+
 // ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
 const overlay = document.getElementById("overlay");
 
-overlay.onclick = () => controls.lock();
+overlay.onclick = () => {
+ controls.lock();
+ document.body.focus();
+};
+
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-const keys = {};
+let forward=false, back=false, left=false, right=false;
 
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+document.addEventListener("keydown", e => {
+ if(e.code==="KeyW") forward=true;
+ if(e.code==="KeyS") back=true;
+ if(e.code==="KeyA") left=true;
+ if(e.code==="KeyD") right=true;
+});
 
-// ===== START =====
+document.addEventListener("keyup", e => {
+ if(e.code==="KeyW") forward=false;
+ if(e.code==="KeyS") back=false;
+ if(e.code==="KeyA") left=false;
+ if(e.code==="KeyD") right=false;
+});
+
+// start
 camera.position.set(0,2,5);
 
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.12;
+ const speed = 0.1;
 
- // direction you're looking
- const forward = new THREE.Vector3();
- camera.getWorldDirection(forward);
- forward.y = 0;
- forward.normalize();
-
- // sideways
- const right = new THREE.Vector3();
- right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
-
- // movement
- if(keys["KeyW"]) camera.position.addScaledVector(forward, speed);
- if(keys["KeyS"]) camera.position.addScaledVector(forward, -speed);
- if(keys["KeyA"]) camera.position.addScaledVector(right, -speed);
- if(keys["KeyD"]) camera.position.addScaledVector(right, speed);
+ if(forward) controls.moveForward(speed);
+ if(back) controls.moveForward(-speed);
+ if(left) controls.moveRight(-speed);
+ if(right) controls.moveRight(speed);
 
  renderer.render(scene,camera);
 }
