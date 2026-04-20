@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine Fixed</title>
+<title>Voxel Engine Optimized</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -96,12 +96,24 @@ const world=new Map();
 const blocks=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
 
-const h=(x,z)=>Math.floor(Math.sin(x*0.1)*4+Math.cos(z*0.1)*4);
-const cave=(x,y,z)=>Math.sin(x*0.15)+Math.sin(y*0.15)+Math.cos(z*0.15);
+function isAir(x,y,z){
+ return !world.has(key(x,y,z));
+}
 
+// optimized place
 function place(x,y,z,type){
  const k=key(x,y,z);
  if(blocks.has(k)) return;
+
+ // skip hidden blocks
+ if(
+  !isAir(x+1,y,z)&&!isAir(x-1,y,z)&&
+  !isAir(x,y+1,z)&&!isAir(x,y-1,z)&&
+  !isAir(x,y,z+1)&&!isAir(x,y,z-1)
+ ){
+  world.set(k,type);
+  return;
+ }
 
  const b=new THREE.Mesh(geo,mats[type]);
  b.position.set(x,y,z);
@@ -110,6 +122,10 @@ function place(x,y,z,type){
  blocks.set(k,b);
  world.set(k,type);
 }
+
+// ===== GENERATION =====
+const h=(x,z)=>Math.floor(Math.sin(x*0.1)*4+Math.cos(z*0.1)*4);
+const cave=(x,y,z)=>Math.sin(x*0.15)+Math.sin(y*0.15)+Math.cos(z*0.15);
 
 function tree(x,y,z){
  for(let i=1;i<5;i++) place(x,y+i,z,"wood");
@@ -191,7 +207,6 @@ camera.position.set(0,20,0);
 // place block
 addEventListener("mousedown",e=>{
  if(e.button!==2||!target) return;
-
  const {pos,normal}=target;
  place(pos.x+normal.x,pos.y+normal.y,pos.z+normal.z,inv[slot]);
 });
@@ -235,35 +250,52 @@ function animate(){
   else velY=0;
  }
 
- // raycast (FAST FIX)
+ // raycast
  ray.setFromCamera({x:0,y:0},camera);
- const hits=ray.intersectObjects(scene.children,false);
+ const hits=ray.intersectObjects([...blocks.values()]);
 
  if(hits.length){
-  const h=hits.find(o=>o.object.geometry===geo);
-  if(h){
-   const pos=h.object.position.clone();
-   const normal=h.face.normal.clone();
+  const h=hits[0];
+  const pos=h.object.position.clone();
+  const normal=h.face.normal.clone();
 
-   target={pos,normal};
+  target={pos,normal};
 
-   outline.visible=true;
-   outline.position.copy(pos);
+  outline.visible=true;
+  outline.position.copy(pos);
 
-   // BREAK FIX
-   if(breaking){
-    breakTimer++;
-    if(breakTimer>8){
-     const k=key(pos.x,pos.y,pos.z);
-     if(blocks.has(k)){
-      scene.remove(blocks.get(k));
-      blocks.delete(k);
-      world.delete(k);
+  if(breaking){
+   breakTimer++;
+   if(breakTimer>8){
+    const k=key(pos.x,pos.y,pos.z);
+
+    if(blocks.has(k)){
+     scene.remove(blocks.get(k));
+     blocks.delete(k);
+     world.delete(k);
+
+     // reveal neighbors
+     const dirs=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+     for(const d of dirs){
+      const nx=pos.x+d[0];
+      const ny=pos.y+d[1];
+      const nz=pos.z+d[2];
+      const nk=key(nx,ny,nz);
+
+      if(world.has(nk)&&!blocks.has(nk)){
+       const type=world.get(nk);
+       const b=new THREE.Mesh(geo,mats[type]);
+       b.position.set(nx,ny,nz);
+       scene.add(b);
+       blocks.set(nk,b);
+      }
      }
-     breakTimer=0;
     }
-   } else breakTimer=0;
-  }
+
+    breakTimer=0;
+   }
+  } else breakTimer=0;
+
  } else {
   outline.visible=false;
   target=null;
@@ -274,6 +306,7 @@ function animate(){
 
  renderer.render(scene,camera);
 }
+
 animate();
 
 onresize=()=>{
