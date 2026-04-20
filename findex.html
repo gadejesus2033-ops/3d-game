@@ -2,15 +2,13 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - WORKING BASE</title>
-
+<title>Move Test</title>
 <style>
-body{margin:0;overflow:hidden;background:#000;}
+body{margin:0;overflow:hidden;background:black;}
 #overlay{
- position:absolute;inset:0;
- display:flex;align-items:center;justify-content:center;
- color:white;background:#000;cursor:pointer;
- font-family:sans-serif;
+ position:absolute;inset:0;display:flex;
+ align-items:center;justify-content:center;
+ color:white;font-family:sans-serif;cursor:pointer;
 }
 </style>
 </head>
@@ -23,114 +21,48 @@ body{margin:0;overflow:hidden;background:#000;}
 
 <script>
 
-// ===== BASIC =====
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+// scene
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer = new THREE.WebGLRenderer();
+// camera
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff,0.6));
-const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(10,20,10);
-scene.add(light);
+// light
+scene.add(new THREE.AmbientLight(0xffffff));
 
-// ===== CONTROLS =====
-const controls = new THREE.PointerLockControls(camera,document.body);
+// controls
+const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-const overlay = document.getElementById("overlay");
+const overlay=document.getElementById("overlay");
 
-overlay.onclick = () => {
- controls.lock();
-};
+overlay.onclick=()=>controls.lock();
 
-controls.addEventListener("lock",()=>{
- overlay.style.display="none";
-});
+controls.addEventListener("lock",()=>overlay.style.display="none");
+controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
-controls.addEventListener("unlock",()=>{
- overlay.style.display="flex";
-});
+// ground (just a floor)
+const floor=new THREE.Mesh(
+ new THREE.BoxGeometry(50,1,50),
+ new THREE.MeshBasicMaterial({color:0x00ff00})
+);
+floor.position.y=-1;
+scene.add(floor);
 
-// ===== PLAYER =====
-const player = {width:0.6,height:1.8,depth:0.6};
-let velY = 0;
-let onGround = false;
+// movement
+const keys={};
 
-const gravity = -0.02;
-const jump = 0.25;
+document.addEventListener("keydown",e=>keys[e.code]=true);
+document.addEventListener("keyup",e=>keys[e.code]=false);
 
-// ===== WORLD =====
-const world = new Map();
-const key = (x,y,z)=>`${x},${y},${z}`;
+// start position
+camera.position.set(0,2,5);
 
-// flat ground
-for(let x=-20;x<20;x++){
- for(let z=-20;z<20;z++){
-  for(let y=-3;y<0;y++){
-   world.set(key(x,y,z),1);
-
-   const cube = new THREE.Mesh(
-    new THREE.BoxGeometry(1,1,1),
-    new THREE.MeshLambertMaterial({color:0x3cb043})
-   );
-   cube.position.set(x,y,z);
-   scene.add(cube);
-  }
- }
-}
-
-// ===== COLLISION =====
-function collide(px,py,pz){
-
- const hw=player.width/2;
- const hd=player.depth/2;
-
- const minX=Math.floor(px-hw);
- const maxX=Math.floor(px+hw);
- const minY=Math.floor(py-player.height+0.001);
- const maxY=Math.floor(py-0.001);
- const minZ=Math.floor(pz-hd);
- const maxZ=Math.floor(pz+hd);
-
- for(let x=minX;x<=maxX;x++){
-  for(let y=minY;y<=maxY;y++){
-   for(let z=minZ;z<=maxZ;z++){
-    if(world.has(key(x,y,z))) return true;
-   }
-  }
- }
- return false;
-}
-
-// ===== INPUT =====
-const k={w:0,a:0,s:0,d:0};
-
-document.addEventListener("keydown",e=>{
- if(e.code==="KeyW")k.w=1;
- if(e.code==="KeyS")k.s=1;
- if(e.code==="KeyA")k.a=1;
- if(e.code==="KeyD")k.d=1;
-
- if(e.code==="Space" && onGround){
-  velY = jump;
- }
-});
-
-document.addEventListener("keyup",e=>{
- if(e.code==="KeyW")k.w=0;
- if(e.code==="KeyS")k.s=0;
- if(e.code==="KeyA")k.a=0;
- if(e.code==="KeyD")k.d=0;
-});
-
-// ===== START =====
-camera.position.set(0,3,5);
-
-// ===== LOOP =====
+// loop
 function animate(){
  requestAnimationFrame(animate);
 
@@ -144,45 +76,10 @@ function animate(){
  const right=new THREE.Vector3();
  right.crossVectors(dir,new THREE.Vector3(0,1,0)).normalize();
 
- let dx=0,dz=0;
-
- if(k.w){dx+=dir.x*speed;dz+=dir.z*speed;}
- if(k.s){dx-=dir.x*speed;dz-=dir.z*speed;}
- if(k.a){dx-=right.x*speed;dz-=right.z*speed;}
- if(k.d){dx+=right.x*speed;dz+=right.z*speed;}
-
- // MOVE X
- let nx=camera.position.x+dx;
- if(!collide(nx,camera.position.y,camera.position.z)){
-  camera.position.x=nx;
- }
-
- // MOVE Z
- let nz=camera.position.z+dz;
- if(!collide(camera.position.x,camera.position.y,nz)){
-  camera.position.z=nz;
- }
-
- // GRAVITY
- velY += gravity;
- let ny = camera.position.y + velY;
-
- if(velY<=0){
-  if(collide(camera.position.x,ny,camera.position.z)){
-   camera.position.y = Math.floor(camera.position.y);
-   velY = 0;
-   onGround = true;
-  } else {
-   camera.position.y = ny;
-   onGround = false;
-  }
- } else {
-  if(collide(camera.position.x,ny,camera.position.z)){
-   velY = 0;
-  } else {
-   camera.position.y = ny;
-  }
- }
+ if(keys["KeyW"]) camera.position.addScaledVector(dir,speed);
+ if(keys["KeyS"]) camera.position.addScaledVector(dir,-speed);
+ if(keys["KeyA"]) camera.position.addScaledVector(right,-speed);
+ if(keys["KeyD"]) camera.position.addScaledVector(right,speed);
 
  renderer.render(scene,camera);
 }
