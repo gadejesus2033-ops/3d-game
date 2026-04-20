@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Engine + Terrain</title>
+<title>Minecraft Walkable Terrain</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -46,9 +46,7 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
 
-// =====================
-// 🎮 MOVEMENT (UNCHANGED)
-// =====================
+// controls
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
@@ -63,27 +61,21 @@ controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // input
-const keys = {};
-
-document.addEventListener("keydown", e => keys[e.code]=true);
-document.addEventListener("keyup", e => keys[e.code]=false);
-
-// start position
-camera.position.set(0,5,10);
+const keys={};
+document.addEventListener("keydown",e=>keys[e.code]=true);
+document.addEventListener("keyup",e=>keys[e.code]=false);
 
 // =====================
-// 🟩 TERRAIN SYSTEM (NEW)
+// 🌍 TERRAIN SYSTEM
 // =====================
 
 const world = new Map();
-const blockGeo = new THREE.BoxGeometry(1,1,1);
-const blockMat = new THREE.MeshLambertMaterial({color:0x3cb043});
 
 function key(x,y,z){
  return `${x},${y},${z}`;
 }
 
-// simple height function (Minecraft-like hills)
+// height function
 function height(x,z){
  return Math.floor(
   Math.sin(x*0.2)*2 +
@@ -91,17 +83,22 @@ function height(x,z){
  );
 }
 
-// generate terrain
+// blocks
+const geo = new THREE.BoxGeometry(1,1,1);
+const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
+
+// build terrain
 for(let x=-30;x<30;x++){
  for(let z=-30;z<30;z++){
 
   let h = height(x,z);
 
   for(let y=-3;y<=h;y++){
+
    const k = key(x,y,z);
    world.set(k,1);
 
-   const block = new THREE.Mesh(blockGeo,blockMat);
+   const block = new THREE.Mesh(geo,mat);
    block.position.set(x,y,z);
    scene.add(block);
   }
@@ -109,18 +106,58 @@ for(let x=-30;x<30;x++){
 }
 
 // =====================
-// 🔁 LOOP
+// 🧱 COLLISION (NEW)
 // =====================
+
+function collide(px,py,pz){
+
+ const size = 0.3;
+
+ const minX = Math.floor(px - size);
+ const maxX = Math.floor(px + size);
+
+ const minY = Math.floor(py - 1.8);
+ const maxY = Math.floor(py);
+
+ const minZ = Math.floor(pz - size);
+ const maxZ = Math.floor(pz + size);
+
+ for(let x=minX;x<=maxX;x++){
+  for(let y=minY;y<=maxY;y++){
+   for(let z=minZ;z<=maxZ;z++){
+    if(world.has(key(x,y,z))) return true;
+   }
+  }
+ }
+ return false;
+}
+
+// =====================
+// 🚶 MOVEMENT (LOCKED)
+// =====================
+
+camera.position.set(0,5,10);
+
 function animate(){
  requestAnimationFrame(animate);
 
  const speed = 0.15;
 
- // movement (LOCKED ENGINE)
  if(keys["KeyW"]) controls.moveForward(speed);
  if(keys["KeyS"]) controls.moveForward(-speed);
  if(keys["KeyA"]) controls.moveRight(-speed);
  if(keys["KeyD"]) controls.moveRight(speed);
+
+ // =====================
+ // 🧱 FIX COLLISION (STOP WALKING THROUGH LAND)
+ // =====================
+
+ let pos = camera.position.clone();
+
+ if(collide(pos.x,pos.y,pos.z)){
+  // simple correction: push player up slightly
+  camera.position.y += 0.2;
+ }
 
  renderer.render(scene,camera);
 }
