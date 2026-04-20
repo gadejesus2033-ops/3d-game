@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine Ultimate</title>
+<title>Voxel Engine Fixed</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -25,7 +25,7 @@ body{margin:0;overflow:hidden;background:black;}
 
 <script>
 
-// ===== BASIC SETUP =====
+// ===== SETUP =====
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
@@ -50,11 +50,18 @@ controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-const keys={};let mouseDown=false;
+const keys={};
+let breaking=false;
+
 onkeydown=e=>keys[e.code]=true;
 onkeyup=e=>keys[e.code]=false;
-onmousedown=()=>mouseDown=true;
-onmouseup=()=>mouseDown=false;
+
+addEventListener("mousedown",e=>{
+ if(e.button===0) breaking=true;
+});
+addEventListener("mouseup",e=>{
+ if(e.button===0) breaking=false;
+});
 
 // ===== CONSTANTS =====
 const PLAYER_HEIGHT=1.8,EYE_HEIGHT=1.6,PLAYER_WIDTH=0.3;
@@ -80,7 +87,6 @@ const mats={
  stone:new THREE.MeshLambertMaterial({map:tex(80)}),
  wood:new THREE.MeshLambertMaterial({map:tex(140)}),
  leaves:new THREE.MeshLambertMaterial({map:tex(110),transparent:true,opacity:0.8}),
- torch:new THREE.MeshBasicMaterial({color:0xffaa33})
 };
 
 const geo=new THREE.BoxGeometry(1,1,1);
@@ -90,25 +96,9 @@ const world=new Map();
 const blocks=new Map();
 const key=(x,y,z)=>`${x},${y},${z}`;
 
-// noise
 const h=(x,z)=>Math.floor(Math.sin(x*0.1)*4+Math.cos(z*0.1)*4);
 const cave=(x,y,z)=>Math.sin(x*0.15)+Math.sin(y*0.15)+Math.cos(z*0.15);
 
-// tree
-function tree(x,y,z){
- for(let i=1;i<5;i++){
-  place(x,y+i,z,"wood");
- }
- for(let dx=-2;dx<=2;dx++){
- for(let dz=-2;dz<=2;dz++){
- for(let dy=3;dy<=5;dy++){
-  if(Math.random()>0.3){
-   place(x+dx,y+dy,z+dz,"leaves");
-  }
- }}}
-}
-
-// place helper
 function place(x,y,z,type){
  const k=key(x,y,z);
  if(blocks.has(k)) return;
@@ -119,24 +109,24 @@ function place(x,y,z,type){
 
  blocks.set(k,b);
  world.set(k,type);
-
- if(type==="torch"){
-  const light=new THREE.PointLight(0xffaa33,1,10);
-  light.position.set(x,y,z);
-  scene.add(light);
- }
 }
 
-// generate chunk
+function tree(x,y,z){
+ for(let i=1;i<5;i++) place(x,y+i,z,"wood");
+ for(let dx=-2;dx<=2;dx++)
+ for(let dz=-2;dz<=2;dz++)
+ for(let dy=3;dy<=5;dy++)
+  if(Math.random()>0.3) place(x+dx,y+dy,z+dz,"leaves");
+}
+
 function genChunk(cx,cz){
- for(let x=0;x<16;x++){
+ for(let x=0;x<16;x++)
  for(let z=0;z<16;z++){
   const wx=cx*16+x;
   const wz=cz*16+z;
   let top=h(wx,wz);
 
   for(let y=-10;y<=top;y++){
-
    if(cave(wx,y,wz)>1.2) continue;
 
    let t="stone";
@@ -147,43 +137,41 @@ function genChunk(cx,cz){
   }
 
   if(Math.random()<0.02) tree(wx,top,wz);
- }}
+ }
 }
 
-// load chunks
 function updateChunks(){
  const cx=Math.floor(camera.position.x/16);
  const cz=Math.floor(camera.position.z/16);
 
- for(let x=-2;x<=2;x++){
- for(let z=-2;z<=2;z++){
+ for(let x=-2;x<=2;x++)
+ for(let z=-2;z<=2;z++)
   genChunk(cx+x,cz+z);
- }}
 }
 
 // ===== COLLISION =====
 function collide(px,py,pz){
- for(let x=Math.floor(px-PLAYER_WIDTH);x<=Math.floor(px+PLAYER_WIDTH);x++){
- for(let y=Math.floor(py);y<=Math.floor(py+PLAYER_HEIGHT);y++){
- for(let z=Math.floor(pz-PLAYER_WIDTH);z<=Math.floor(pz+PLAYER_WIDTH);z++){
+ for(let x=Math.floor(px-PLAYER_WIDTH);x<=Math.floor(px+PLAYER_WIDTH);x++)
+ for(let y=Math.floor(py);y<=Math.floor(py+PLAYER_HEIGHT);y++)
+ for(let z=Math.floor(pz-PLAYER_WIDTH);z<=Math.floor(pz+PLAYER_WIDTH);z++)
   if(world.has(key(x,y,z))) return true;
- }}}
  return false;
 }
 
 // ===== INVENTORY =====
-const inv=["dirt","stone","wood","leaves","torch"];
+const inv=["dirt","stone","wood","leaves"];
 let slot=0;
 
 addEventListener("wheel",e=>{
  slot=(slot+(e.deltaY>0?1:-1)+inv.length)%inv.length;
 });
 
-// HUD
 const hud=document.getElementById("hud");
 
 // ===== RAY =====
 const ray=new THREE.Raycaster();
+ray.far=6;
+
 let target=null,breakTimer=0;
 
 // outline
@@ -200,14 +188,13 @@ const gravity=-0.02,jump=0.35;
 
 camera.position.set(0,20,0);
 
-// ===== CLICK =====
+// place block
 addEventListener("mousedown",e=>{
  if(e.button!==2||!target) return;
 
  const {pos,normal}=target;
  place(pos.x+normal.x,pos.y+normal.y,pos.z+normal.z,inv[slot]);
 });
-
 addEventListener("contextmenu",e=>e.preventDefault());
 
 // ===== LOOP =====
@@ -248,30 +235,35 @@ function animate(){
   else velY=0;
  }
 
- // ray
+ // raycast (FAST FIX)
  ray.setFromCamera({x:0,y:0},camera);
- const hits=ray.intersectObjects([...blocks.values()]);
+ const hits=ray.intersectObjects(scene.children,false);
 
  if(hits.length){
-  const h=hits[0];
-  const pos=h.object.position.clone();
-  const normal=h.face.normal.clone();
+  const h=hits.find(o=>o.object.geometry===geo);
+  if(h){
+   const pos=h.object.position.clone();
+   const normal=h.face.normal.clone();
 
-  target={pos,normal};
-  outline.visible=true;
-  outline.position.copy(pos);
+   target={pos,normal};
 
-  if(mouseDown){
-   breakTimer++;
-   if(breakTimer>15){
-    const k=key(pos.x,pos.y,pos.z);
-    scene.remove(blocks.get(k));
-    blocks.delete(k);
-    world.delete(k);
-    breakTimer=0;
-   }
-  } else breakTimer=0;
+   outline.visible=true;
+   outline.position.copy(pos);
 
+   // BREAK FIX
+   if(breaking){
+    breakTimer++;
+    if(breakTimer>8){
+     const k=key(pos.x,pos.y,pos.z);
+     if(blocks.has(k)){
+      scene.remove(blocks.get(k));
+      blocks.delete(k);
+      world.delete(k);
+     }
+     breakTimer=0;
+    }
+   } else breakTimer=0;
+  }
  } else {
   outline.visible=false;
   target=null;
