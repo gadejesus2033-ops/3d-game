@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Full Movement (Arrow Keys)</title>
+<title>Correct Movement</title>
 <style>
 body { margin:0; overflow:hidden; }
 #overlay {
@@ -90,18 +90,22 @@ function animate(){
 
  const speed = 0.1;
 
- // forward direction
+ // get forward direction
  const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
 
- // sideways direction
+ // 🔥 FIX: ignore up/down
+ forward.y = 0;
+ forward.normalize();
+
+ // get right direction
  const right = new THREE.Vector3();
  right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
  let moveX = 0;
  let moveZ = 0;
 
- // forward/back
+ // forward / backward
  if(keys.up){
   moveX += forward.x * speed;
   moveZ += forward.z * speed;
@@ -111,7 +115,7 @@ function animate(){
   moveZ -= forward.z * speed;
  }
 
- // left/right
+ // left / right
  if(keys.left){
   moveX -= right.x * speed;
   moveZ -= right.z * speed;
