@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Stable</title>
+<title>Minecraft Smooth Movement</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -53,7 +53,6 @@ const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
 const overlay=document.getElementById("overlay");
-
 overlay.onclick=()=>controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
@@ -62,6 +61,11 @@ controls.addEventListener("unlock",()=>overlay.style.display="flex");
 const keys={};
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
+
+// ===== CONSTANTS =====
+const PLAYER_HEIGHT=1.8;
+const EYE_HEIGHT=1.6;
+const PLAYER_WIDTH=0.3;
 
 // ===== TEXTURE =====
 function makeTexture(){
@@ -114,9 +118,6 @@ for(let x=-50;x<50;x++){
 }
 
 // ===== COLLISION =====
-const PLAYER_HEIGHT=1.8;
-const PLAYER_WIDTH=0.3;
-
 function collide(px,py,pz){
 
  for(let x=Math.floor(px-PLAYER_WIDTH);x<=Math.floor(px+PLAYER_WIDTH);x++){
@@ -137,8 +138,8 @@ let onGround=false;
 const gravity=-0.02;
 const jumpPower=0.35;
 
-// spawn
-camera.position.set(0,10,10);
+// spawn (with eye height)
+camera.position.set(0,10+EYE_HEIGHT,10);
 
 // jump
 document.addEventListener("keydown",e=>{
@@ -169,37 +170,45 @@ function animate(){
  if(keys["KeyA"]){dx-=right.x*speed;dz-=right.z*speed;}
  if(keys["KeyD"]){dx+=right.x*speed;dz+=right.z*speed;}
 
- // ===== XZ MOVEMENT (fixed) =====
+ // movement
  let nx=camera.position.x+dx;
  let nz=camera.position.z+dz;
 
- if(!collide(nx,camera.position.y-PLAYER_HEIGHT,camera.position.z)){
+ if(!collide(nx,camera.position.y-EYE_HEIGHT,camera.position.z)){
   camera.position.x=nx;
  }
 
- if(!collide(camera.position.x,camera.position.y-PLAYER_HEIGHT,nz)){
+ if(!collide(camera.position.x,camera.position.y-EYE_HEIGHT,nz)){
   camera.position.z=nz;
  }
 
- // ===== GRAVITY (fixed) =====
+ // ===== SMOOTH GRAVITY =====
  velY+=gravity;
+
+ // damp vertical movement (removes bounce feel)
+ velY*=0.98;
+
  let ny=camera.position.y+velY;
 
  if(velY<=0){
-  if(collide(camera.position.x,ny-PLAYER_HEIGHT,camera.position.z)){
-   camera.position.y=Math.floor(ny)+PLAYER_HEIGHT;
+
+  if(collide(camera.position.x,ny-EYE_HEIGHT,camera.position.z)){
+   camera.position.y=Math.floor(ny-EYE_HEIGHT)+EYE_HEIGHT+1;
    velY=0;
    onGround=true;
   } else {
    camera.position.y=ny;
    onGround=false;
   }
+
  } else {
+
   if(!collide(camera.position.x,ny,camera.position.z)){
    camera.position.y=ny;
   } else {
    velY=0;
   }
+
  }
 
  renderer.render(scene,camera);
