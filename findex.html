@@ -2,22 +2,20 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Multiplayer - Final</title>
+<title>Voxel Terrain Upgrade</title>
 
 <style>
 body { margin:0; overflow:hidden; }
-
 #overlay{
  position:absolute;
  inset:0;
- background:#000;
- color:#fff;
+ background:black;
+ color:white;
  display:flex;
  align-items:center;
  justify-content:center;
  cursor:pointer;
 }
-
 #crosshair{
  position:fixed;
  left:50%;
@@ -25,7 +23,6 @@ body { margin:0; overflow:hidden; }
  width:10px;
  height:10px;
  transform:translate(-50%,-50%);
- pointer-events:none;
 }
 #crosshair:before,#crosshair:after{
  content:"";
@@ -38,6 +35,7 @@ body { margin:0; overflow:hidden; }
 </head>
 
 <body>
+
 <div id="overlay">CLICK TO START</div>
 <div id="crosshair"></div>
 
@@ -46,7 +44,7 @@ body { margin:0; overflow:hidden; }
 
 <script>
 
-// ================= SCENE =================
+// ================= BASIC SETUP =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
@@ -55,103 +53,72 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(20,30,10);
 scene.add(light);
 
-// ================= CAMERA =================
 const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ================= WORLD =================
+// ================= BLOCK SYSTEM =================
 const geo = new THREE.BoxGeometry(1,1,1);
 
 const mat = {
- grass:new THREE.MeshLambertMaterial({color:0x3cb043,side:THREE.DoubleSide}),
- dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b,side:THREE.DoubleSide}),
- stone:new THREE.MeshLambertMaterial({color:0x888888,side:THREE.DoubleSide})
+ grass:new THREE.MeshLambertMaterial({color:0x3cb043}),
+ dirt:new THREE.MeshLambertMaterial({color:0x8b5a2b}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888})
 };
 
 const world = new Map();
-const meshes = [];
 
-const key=(x,y,z)=>`${x},${y},${z}`;
+function key(x,y,z){ return `${x},${y},${z}`; }
 
 function add(x,y,z,m){
  const mesh=new THREE.Mesh(geo,m);
  mesh.position.set(x,y,z);
  scene.add(mesh);
- meshes.push(mesh);
  world.set(key(x,y,z),1);
 }
 
-function remove(x,y,z){
- const k=key(x,y,z);
- if(!world.has(k)) return;
- world.delete(k);
+// ================= REALISTIC TERRAIN =================
 
- const obj=meshes.find(m=>m.position.x===x&&m.position.y===y&&m.position.z===z);
- if(obj) scene.remove(obj);
-}
+// smoother noise (multi-octave style)
+function noise(x,z){
 
-// world
-for(let x=-25;x<25;x++){
- for(let z=-25;z<25;z++){
-  add(x,-1,z,mat.grass);
-  add(x,-2,z,mat.dirt);
+ let total = 0;
+ let freq = 0.05;
+ let amp = 1;
+ let max = 0;
+
+ for(let i=0;i<4;i++){
+  total += (Math.sin(x*freq) + Math.cos(z*freq)) * amp;
+  max += amp;
+
+  amp *= 0.5;
+  freq *= 2;
  }
+
+ return total / max;
 }
 
-// ================= PLAYER =================
-const player={width:0.98,depth:0.98,height:2};
-let velY=0,onGround=false;
+// generate terrain
+for(let x=-80;x<80;x++){
+ for(let z=-80;z<80;z++){
 
-const gravity=-0.015;
-const jumpPower=0.22;
+  let height = Math.floor(noise(x,z) * 10);
 
-// ================= COLLISION =================
-function collide(px,py,pz){
+  for(let y=-10;y<=height;y++){
 
- const hw=player.width/2;
- const hd=player.depth/2;
-
- const minX=Math.floor(px-hw);
- const maxX=Math.floor(px+hw);
-
- const minY=Math.floor(py);
- const maxY=Math.floor(py+player.height-0.001);
-
- const minZ=Math.floor(pz-hd);
- const maxZ=Math.floor(pz+hd);
-
- for(let x=minX;x<=maxX;x++){
-  for(let y=minY;y<=maxY;y++){
-   for(let z=minZ;z<=maxZ;z++){
-    if(world.has(`${x},${y},${z}`)) return true;
+   if(y === height){
+    add(x,y,z,mat.grass);
    }
-  }
- }
- return false;
-}
+   else if(y > height-3){
+    add(x,y,z,mat.dirt);
+   }
+   else{
+    add(x,y,z,mat.stone);
+   }
 
-// ================= MOVE =================
-function move(dx,dz){
- const steps=6;
-
- for(let i=0;i<steps;i++){
-
-  let sx=dx/steps;
-  let sz=dz/steps;
-
-  // X
-  let nx=camera.position.x+sx;
-  if(!collide(nx,camera.position.y,camera.position.z)){
-   camera.position.x=nx;
   }
 
-  // Z
-  let nz=camera.position.z+sz;
-  if(!collide(camera.position.x,camera.position.y,nz)){
-   camera.position.z=nz;
-  }
  }
 }
 
@@ -160,116 +127,35 @@ const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
 overlay.onclick=()=>document.body.requestPointerLock();
+
 document.addEventListener("pointerlockchange",()=>{
  overlay.style.display=document.pointerLockElement?"none":"flex";
 });
 
-// ================= INPUT =================
-const k={w:false,a:false,s:false,d:false};
+// ================= SIMPLE MOVEMENT =================
+const keys={w:false,a:false,s:false,d:false};
 
 onkeydown=e=>{
- if(e.code==="KeyW")k.w=true;
- if(e.code==="KeyA")k.a=true;
- if(e.code==="KeyS")k.s=true;
- if(e.code==="KeyD")k.d=true;
-
- if(e.code==="Space"&&onGround){
-  velY=jumpPower;
-  onGround=false;
- }
+ if(e.code==="KeyW")keys.w=true;
+ if(e.code==="KeyA")keys.a=true;
+ if(e.code==="KeyS")keys.s=true;
+ if(e.code==="KeyD")keys.d=true;
 };
 
 onkeyup=e=>{
- if(e.code==="KeyW")k.w=false;
- if(e.code==="KeyA")k.a=false;
- if(e.code==="KeyS")k.s=false;
- if(e.code==="KeyD")k.d=false;
+ if(e.code==="KeyW")keys.w=false;
+ if(e.code==="KeyA")keys.a=false;
+ if(e.code==="KeyS")keys.s=false;
+ if(e.code==="KeyD")keys.d=false;
 };
 
-// ================= BLOCK INTERACTION =================
-const ray=new THREE.Raycaster();
-
-addEventListener("mousedown",e=>{
- ray.setFromCamera({x:0,y:0},camera);
-
- const hits=ray.intersectObjects(meshes);
- if(!hits.length) return;
-
- const hit=hits[0];
- const p=hit.object.position;
-
- const x=Math.floor(p.x);
- const y=Math.floor(p.y);
- const z=Math.floor(p.z);
-
- if(e.button===0) remove(x,y,z);
-
- if(e.button===2){
-  let n=hit.face.normal.clone();
-  n.transformDirection(hit.object.matrixWorld);
-
-  const px=Math.floor(hit.point.x+n.x*0.5);
-  const py=Math.floor(hit.point.y+n.y*0.5);
-  const pz=Math.floor(hit.point.z+n.z*0.5);
-
-  if(!world.has(key(px,py,pz))){
-   add(px,py,pz,mat.stone);
-  }
- }
-});
-
-addEventListener("contextmenu",e=>e.preventDefault());
-
-// ================= MULTIPLAYER =================
-let socket=new WebSocket("ws://localhost:3000");
-let myId=null;
-const others={};
-
-function createPlayer(){
- return new THREE.Mesh(
-  new THREE.BoxGeometry(0.98,2,0.98),
-  new THREE.MeshBasicMaterial({color:0xff0000})
- );
-}
-
-socket.onmessage=e=>{
- const data=JSON.parse(e.data);
-
- if(data.type==="init") myId=data.id;
-
- if(data.type==="players"){
-
-  for(const id in data.players){
-   if(id===myId) continue;
-
-   const p=data.players[id];
-
-   if(!others[id]){
-    const m=createPlayer();
-    scene.add(m);
-    others[id]=m;
-   }
-
-   others[id].position.set(p.x,p.y-1,p.z);
-  }
-
-  for(const id in others){
-   if(!data.players[id]){
-    scene.remove(others[id]);
-    delete others[id];
-   }
-  }
- }
-};
-
-// ================= START =================
-camera.position.set(0,5,5);
+camera.position.set(0,10,5);
 
 // ================= LOOP =================
 function animate(){
  requestAnimationFrame(animate);
 
- const speed=0.12;
+ const speed=0.15;
 
  const dir=new THREE.Vector3();
  camera.getWorldDirection(dir);
@@ -279,58 +165,16 @@ function animate(){
  const right=new THREE.Vector3();
  right.crossVectors(dir,new THREE.Vector3(0,1,0)).normalize();
 
- let dx=0,dz=0;
-
- if(k.w){dx+=dir.x*speed;dz+=dir.z*speed;}
- if(k.s){dx-=dir.x*speed;dz-=dir.z*speed;}
- if(k.a){dx-=right.x*speed;dz-=right.z*speed;}
- if(k.d){dx+=right.x*speed;dz+=right.z*speed;}
-
- move(dx,dz);
-
- // ===== FIXED GRAVITY =====
- velY+=gravity;
- let ny=camera.position.y+velY;
-
- if(velY<=0){
-  if(collide(camera.position.x,ny-player.height,camera.position.z)){
-   camera.position.y=Math.floor(camera.position.y);
-   velY=0;
-   onGround=true;
-  } else {
-   camera.position.y=ny;
-   onGround=false;
-  }
- } else {
-  if(collide(camera.position.x,ny,camera.position.z)){
-   velY=0;
-  } else {
-   camera.position.y=ny;
-  }
- }
-
- // send position
- if(socket.readyState===1&&myId){
-  socket.send(JSON.stringify({
-   type:"move",
-   pos:{
-    x:camera.position.x,
-    y:camera.position.y,
-    z:camera.position.z
-   }
-  }));
- }
+ if(keys.w) camera.position.addScaledVector(dir,speed);
+ if(keys.s) camera.position.addScaledVector(dir,-speed);
+ if(keys.a) camera.position.addScaledVector(right,-speed);
+ if(keys.d) camera.position.addScaledVector(right,speed);
 
  renderer.render(scene,camera);
 }
 animate();
 
-onresize=()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-};
-
 </script>
+
 </body>
 </html>
