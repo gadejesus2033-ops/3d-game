@@ -2,18 +2,16 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game - WORKING</title>
+<title>Voxel Game Auto Start</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
-
 #overlay{
  position:absolute;inset:0;
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;
  background:black;
 }
-
 #crosshair{
  position:fixed;left:50%;top:50%;
  width:10px;height:10px;
@@ -29,7 +27,7 @@ body{margin:0;overflow:hidden;background:black;}
 
 <body>
 
-<div id="overlay">CLICK TO START</div>
+<div id="overlay">Loading... (click if it doesn’t start)</div>
 <div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -42,7 +40,6 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-
 const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -55,98 +52,80 @@ scene.add(controls.getObject());
 
 const overlay=document.getElementById("overlay");
 
-// click anywhere to start
-document.addEventListener("click",()=>{
- if(!controls.isLocked) controls.lock();
+// try auto start
+setTimeout(()=>{
+ tryLock();
+},200);
+
+// fallback click
+document.addEventListener("click", tryLock);
+
+function tryLock(){
+ if(!controls.isLocked){
+  controls.lock();
+ }
+}
+
+controls.addEventListener("lock",()=>{
+ overlay.style.display="none";
 });
 
-controls.addEventListener("lock",()=>overlay.style.display="none");
-controls.addEventListener("unlock",()=>overlay.style.display="flex");
+controls.addEventListener("unlock",()=>{
+ overlay.style.display="flex";
+ overlay.innerText="Click to resume";
+});
 
 // ===== INPUT =====
-const keys={};
-let breaking=false;
+const keys={},breaking=false;
 
 onkeydown=e=>keys[e.code]=true;
 onkeyup=e=>keys[e.code]=false;
 
-onmousedown=e=>{if(e.button===0)breaking=true;}
-onmouseup=e=>{if(e.button===0)breaking=false;}
-
 // ===== CONSTANTS =====
-const HEIGHT=1.8;
-const EYE=1.6;
-const WIDTH=0.3;
+const HEIGHT=1.8,EYE=1.6,WIDTH=0.3;
 
 // ===== BLOCK =====
 const geo=new THREE.BoxGeometry(1,1,1);
 const mat=new THREE.MeshLambertMaterial({color:0x55aa55});
 
 // ===== WORLD =====
-const SIZE=50;
-const HALF=SIZE/2;
-
+const SIZE=50,HALF=SIZE/2;
 const world=new Map();
 const meshes=new Map();
 
 const key=(x,y,z)=>`${x},${y},${z}`;
 
-function addBlock(x,y,z){
+function add(x,y,z){
  const k=key(x,y,z);
- if(world.has(k)) return;
-
  const m=new THREE.Mesh(geo,mat);
  m.position.set(x,y,z);
-
  scene.add(m);
- world.set(k,true);
+ world.set(k,1);
  meshes.set(k,m);
 }
 
-function removeBlock(x,y,z){
- const k=key(x,y,z);
- if(meshes.has(k)){
-  scene.remove(meshes.get(k));
-  meshes.delete(k);
-  world.delete(k);
- }
-}
-
-// generate flat world
 for(let x=-HALF;x<HALF;x++){
  for(let z=-HALF;z<HALF;z++){
   for(let y=0;y<3;y++){
-   addBlock(x,y,z);
+   add(x,y,z);
   }
  }
 }
 
 // ===== COLLISION =====
 function collide(px,py,pz){
- for(let x=Math.floor(px-WIDTH);x<=Math.floor(px+WIDTH);x++){
-  for(let y=Math.floor(py);y<=Math.floor(py+HEIGHT);y++){
-   for(let z=Math.floor(pz-WIDTH);z<=Math.floor(pz+WIDTH);z++){
-    if(world.has(key(x,y,z))) return true;
-   }
-  }
- }
+ for(let x=Math.floor(px-WIDTH);x<=Math.floor(px+WIDTH);x++)
+ for(let y=Math.floor(py);y<=Math.floor(py+HEIGHT);y++)
+ for(let z=Math.floor(pz-WIDTH);z<=Math.floor(pz+WIDTH);z++)
+  if(world.has(key(x,y,z))) return true;
  return false;
 }
 
 // ===== PHYSICS =====
-let vy=0;
-let onGround=false;
-
-const gravity=-0.02;
-const jump=0.35;
+let vy=0,onGround=false;
+const gravity=-0.02,jump=0.35;
 
 camera.position.set(0,5,5);
-
-// ===== RAY =====
-const ray=new THREE.Raycaster();
-ray.far=6;
-
-let breakTimer=0;
 
 // ===== LOOP =====
 function animate(){
@@ -154,67 +133,33 @@ function animate(){
 
  const speed=0.15;
 
- const forward=new THREE.Vector3();
- camera.getWorldDirection(forward);
- forward.y=0;
- forward.normalize();
+ const f=new THREE.Vector3();
+ camera.getWorldDirection(f);f.y=0;f.normalize();
 
- const right=new THREE.Vector3();
- right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
+ const r=new THREE.Vector3();
+ r.crossVectors(f,new THREE.Vector3(0,1,0)).normalize();
 
- let nx=camera.position.x;
- let nz=camera.position.z;
+ let nx=camera.position.x,nz=camera.position.z;
 
- if(keys["KeyW"]){nx+=forward.x*speed;nz+=forward.z*speed;}
- if(keys["KeyS"]){nx-=forward.x*speed;nz-=forward.z*speed;}
- if(keys["KeyA"]){nx-=right.x*speed;nz-=right.z*speed;}
- if(keys["KeyD"]){nx+=right.x*speed;nz+=right.z*speed;}
+ if(keys["KeyW"]){nx+=f.x*speed;nz+=f.z*speed;}
+ if(keys["KeyS"]){nx-=f.x*speed;nz-=f.z*speed;}
+ if(keys["KeyA"]){nx-=r.x*speed;nz-=r.z*speed;}
+ if(keys["KeyD"]){nx+=r.x*speed;nz+=r.z*speed;}
 
- if(!collide(nx,camera.position.y-EYE,camera.position.z)){
-  camera.position.x=nx;
- }
+ if(!collide(nx,camera.position.y-EYE,camera.position.z)) camera.position.x=nx;
+ if(!collide(camera.position.x,camera.position.y-EYE,nz)) camera.position.z=nz;
 
- if(!collide(camera.position.x,camera.position.y-EYE,nz)){
-  camera.position.z=nz;
- }
-
- // gravity
  vy+=gravity;
  let ny=camera.position.y+vy;
 
  if(vy<=0){
   if(collide(camera.position.x,ny-EYE,camera.position.z)){
    camera.position.y=Math.floor(ny-EYE)+EYE+1;
-   vy=0;
-   onGround=true;
-  } else {
-   camera.position.y=ny;
-   onGround=false;
-  }
- } else {
-  camera.position.y=ny;
- }
+   vy=0;onGround=true;
+  } else camera.position.y=ny;
+ } else camera.position.y=ny;
 
- if(keys["Space"] && onGround){
-  vy=jump;
-  onGround=false;
- }
-
- // ===== BREAK BLOCK =====
- ray.setFromCamera({x:0,y:0},camera);
- const hits=ray.intersectObjects([...meshes.values()]);
-
- if(hits.length){
-  const pos=hits[0].object.position;
-
-  if(breaking){
-   breakTimer++;
-   if(breakTimer>8){
-    removeBlock(pos.x,pos.y,pos.z);
-    breakTimer=0;
-   }
-  } else breakTimer=0;
- }
+ if(keys["Space"]&&onGround){vy=jump;onGround=false;}
 
  renderer.render(scene,camera);
 }
