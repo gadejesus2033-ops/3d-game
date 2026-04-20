@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Fixed Walking Terrain</title>
+<title>Minecraft Gravity + Terrain</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -33,8 +33,9 @@ body{margin:0;overflow:hidden;background:black;}
 <script>
 
 // =====================
-// ENGINE
+// ENGINE (UNCHANGED)
 // =====================
+
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
@@ -62,6 +63,7 @@ document.addEventListener("keyup",e=>keys[e.code]=false);
 // =====================
 // WORLD
 // =====================
+
 const world=new Map();
 const geo=new THREE.BoxGeometry(1,1,1);
 const mat=new THREE.MeshLambertMaterial({color:0x3cb043});
@@ -72,7 +74,7 @@ function height(x,z){
  return Math.floor(Math.sin(x*0.2)*2 + Math.cos(z*0.2)*2);
 }
 
-// build terrain
+// generate terrain
 for(let x=-30;x<30;x++){
  for(let z=-30;z<30;z++){
   let h=height(x,z);
@@ -86,18 +88,19 @@ for(let x=-30;x<30;x++){
 }
 
 // =====================
-// COLLISION (correct)
+// COLLISION
 // =====================
+
 function collide(px,py,pz){
 
- const size=0.3;
+ const s=0.3;
 
- const minX=Math.floor(px-size);
- const maxX=Math.floor(px+size);
+ const minX=Math.floor(px-s);
+ const maxX=Math.floor(px+s);
  const minY=Math.floor(py-1.8);
  const maxY=Math.floor(py);
- const minZ=Math.floor(pz-size);
- const maxZ=Math.floor(pz+size);
+ const minZ=Math.floor(pz-s);
+ const maxZ=Math.floor(pz+s);
 
  for(let x=minX;x<=maxX;x++){
   for(let y=minY;y<=maxY;y++){
@@ -110,19 +113,31 @@ function collide(px,py,pz){
 }
 
 // =====================
-// MOVEMENT (FIXED MINECRAFT STYLE)
+// GRAVITY SYSTEM (NEW)
 // =====================
-camera.position.set(0,5,10);
 
-function canMove(nx,ny,nz){
- return !collide(nx,ny,nz);
-}
+let velocityY = 0;
+let onGround = false;
+
+const gravity = -0.015;
+const jumpPower = 0.28;
+
+// =====================
+// START POSITION
+// =====================
+
+camera.position.set(0,10,10);
+
+// =====================
+// LOOP
+// =====================
 
 function animate(){
  requestAnimationFrame(animate);
 
  const speed=0.15;
 
+ // ===== MOVEMENT =====
  const forward=new THREE.Vector3();
  camera.getWorldDirection(forward);
  forward.y=0;
@@ -134,30 +149,43 @@ function animate(){
  let nx=camera.position.x;
  let nz=camera.position.z;
 
- if(keys["KeyW"]){
-  nx += forward.x*speed;
-  nz += forward.z*speed;
+ if(keys["KeyW"]){nx+=forward.x*speed;nz+=forward.z*speed;}
+ if(keys["KeyS"]){nx-=forward.x*speed;nz-=forward.z*speed;}
+ if(keys["KeyA"]){nx-=right.x*speed;nz-=right.z*speed;}
+ if(keys["KeyD"]){nx+=right.x*speed;nz+=right.z*speed;}
+
+ // horizontal collision
+ if(!collide(nx,camera.position.y,camera.position.z)){
+  camera.position.x=nx;
  }
- if(keys["KeyS"]){
-  nx -= forward.x*speed;
-  nz -= forward.z*speed;
- }
- if(keys["KeyA"]){
-  nx -= right.x*speed;
-  nz -= right.z*speed;
- }
- if(keys["KeyD"]){
-  nx += right.x*speed;
-  nz += right.z*speed;
+ if(!collide(camera.position.x,camera.position.y,nz)){
+  camera.position.z=nz;
  }
 
- // ✔ ONLY MOVE IF VALID
- if(canMove(nx,camera.position.y,camera.position.z)){
-  camera.position.x = nx;
- }
+ // =====================
+ // 🧲 GRAVITY (NEW)
+ // =====================
 
- if(canMove(camera.position.x,camera.position.y,nz)){
-  camera.position.z = nz;
+ velocityY += gravity;
+
+ let ny = camera.position.y + velocityY;
+
+ // ground check
+ if(velocityY <= 0){
+  if(collide(camera.position.x,ny,camera.position.z)){
+   camera.position.y = Math.floor(camera.position.y);
+   velocityY = 0;
+   onGround = true;
+  } else {
+   camera.position.y = ny;
+   onGround = false;
+  }
+ } else {
+  if(!collide(camera.position.x,ny,camera.position.z)){
+   camera.position.y = ny;
+  } else {
+   velocityY = 0;
+  }
  }
 
  renderer.render(scene,camera);
