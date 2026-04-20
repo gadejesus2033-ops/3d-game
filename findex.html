@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Movement + Floor</title>
+<title>Minecraft Engine + Terrain</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -11,41 +11,44 @@ body{margin:0;overflow:hidden;background:black;}
  display:flex;align-items:center;justify-content:center;
  color:white;font-family:sans-serif;cursor:pointer;
 }
+#crosshair{
+ position:fixed;left:50%;top:50%;
+ width:10px;height:10px;transform:translate(-50%,-50%);
+}
+#crosshair:before,#crosshair:after{
+ content:"";position:absolute;background:white;
+}
+#crosshair:before{width:10px;height:2px;top:4px;}
+#crosshair:after{width:2px;height:10px;left:4px;}
 </style>
 </head>
 
 <body>
 <div id="overlay">CLICK TO START</div>
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== SCENE =====
+// =====================
+// 🎮 ENGINE (LOCKED)
+// =====================
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-// camera
 const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-
-// renderer
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ===== LIGHT (optional but ok) =====
 scene.add(new THREE.AmbientLight(0xffffff));
 
-// ===== FLOOR (VISIBLE) =====
-const floor = new THREE.Mesh(
- new THREE.BoxGeometry(200,1,200),
- new THREE.MeshBasicMaterial({color:0x00ff00})
-);
-floor.position.set(0,-1,0);
-scene.add(floor);
-
-// ===== CONTROLS =====
+// =====================
+// 🎮 MOVEMENT (UNCHANGED)
+// =====================
 const controls = new THREE.PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
@@ -59,38 +62,65 @@ overlay.onclick = () => {
 controls.addEventListener("lock",()=>overlay.style.display="none");
 controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
-// ===== INPUT =====
+// input
 const keys = {};
 
 document.addEventListener("keydown", e => keys[e.code]=true);
 document.addEventListener("keyup", e => keys[e.code]=false);
 
-// ===== START POSITION =====
-camera.position.set(0,2,5);
+// start position
+camera.position.set(0,5,10);
 
-// ===== LOOP =====
+// =====================
+// 🟩 TERRAIN SYSTEM (NEW)
+// =====================
+
+const world = new Map();
+const blockGeo = new THREE.BoxGeometry(1,1,1);
+const blockMat = new THREE.MeshLambertMaterial({color:0x3cb043});
+
+function key(x,y,z){
+ return `${x},${y},${z}`;
+}
+
+// simple height function (Minecraft-like hills)
+function height(x,z){
+ return Math.floor(
+  Math.sin(x*0.2)*2 +
+  Math.cos(z*0.2)*2
+ );
+}
+
+// generate terrain
+for(let x=-30;x<30;x++){
+ for(let z=-30;z<30;z++){
+
+  let h = height(x,z);
+
+  for(let y=-3;y<=h;y++){
+   const k = key(x,y,z);
+   world.set(k,1);
+
+   const block = new THREE.Mesh(blockGeo,blockMat);
+   block.position.set(x,y,z);
+   scene.add(block);
+  }
+ }
+}
+
+// =====================
+// 🔁 LOOP
+// =====================
 function animate(){
  requestAnimationFrame(animate);
 
  const speed = 0.15;
 
- // ===== MINECRAFT DIRECTION SYSTEM =====
- const forward = new THREE.Vector3();
- camera.getWorldDirection(forward);
- forward.y = 0;
- forward.normalize();
-
- const right = new THREE.Vector3();
- right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
-
- // ===== MOVEMENT (W = where you look) =====
+ // movement (LOCKED ENGINE)
  if(keys["KeyW"]) controls.moveForward(speed);
  if(keys["KeyS"]) controls.moveForward(-speed);
  if(keys["KeyA"]) controls.moveRight(-speed);
  if(keys["KeyD"]) controls.moveRight(speed);
-
- // keep player above ground (simple stand system)
- camera.position.y = 2;
 
  renderer.render(scene,camera);
 }
