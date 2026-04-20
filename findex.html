@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game - Working</title>
+<title>Voxel Game - WORKING</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -24,174 +24,123 @@ body{margin:0;overflow:hidden;background:black;}
 }
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
-
-#hud{
- position:fixed;bottom:10px;left:10px;
- color:white;font-family:sans-serif;
-}
 </style>
 </head>
 
 <body>
 
-<div id="overlay">CLICK ANYWHERE TO START</div>
+<div id="overlay">CLICK TO START</div>
 <div id="crosshair"></div>
-<div id="hud"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
-// ===== GLOBAL =====
-let health = 100;
-
 // ===== SCENE =====
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+const renderer=new THREE.WebGLRenderer();
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff,0.8));
 
-// ===== CONTROLS (FIXED) =====
-const controls = new THREE.PointerLockControls(camera, document.body);
+// ===== CONTROLS =====
+const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-const overlay = document.getElementById("overlay");
+const overlay=document.getElementById("overlay");
 
-// click anywhere
-document.addEventListener("click", () => {
- if(!controls.isLocked){
-  controls.lock();
- }
+// click anywhere to start
+document.addEventListener("click",()=>{
+ if(!controls.isLocked) controls.lock();
 });
 
-// lock/unlock UI
-controls.addEventListener("lock", () => {
- overlay.style.display = "none";
-});
-
-controls.addEventListener("unlock", () => {
- overlay.style.display = "flex";
-});
-
-// fallback
-document.addEventListener("pointerlockerror", () => {
- overlay.innerText = "CLICK AGAIN TO START";
-});
+controls.addEventListener("lock",()=>overlay.style.display="none");
+controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-const keys = {};
-let breaking = false;
+const keys={};
+let breaking=false;
 
-document.addEventListener("keydown", e => keys[e.code]=true);
-document.addEventListener("keyup", e => keys[e.code]=false);
+onkeydown=e=>keys[e.code]=true;
+onkeyup=e=>keys[e.code]=false;
 
-document.addEventListener("mousedown", e=>{
- if(e.button===0) breaking=true;
-});
-document.addEventListener("mouseup", e=>{
- if(e.button===0) breaking=false;
-});
+onmousedown=e=>{if(e.button===0)breaking=true;}
+onmouseup=e=>{if(e.button===0)breaking=false;}
 
 // ===== CONSTANTS =====
-const HEIGHT=1.8, EYE=1.6, WIDTH=0.3;
+const HEIGHT=1.8;
+const EYE=1.6;
+const WIDTH=0.3;
 
-// ===== TEXTURE =====
-function tex(c){
- const cv=document.createElement("canvas");
- cv.width=8;cv.height=8;
- const ctx=cv.getContext("2d");
-
- for(let x=0;x<8;x++){
-  for(let y=0;y<8;y++){
-   let s=c+Math.random()*20;
-   ctx.fillStyle=`rgb(${s},${s},${s})`;
-   ctx.fillRect(x,y,1,1);
-  }
- }
-
- const t=new THREE.CanvasTexture(cv);
- t.magFilter=t.minFilter=THREE.NearestFilter;
- return t;
-}
-
-const mats={
- grass:new THREE.MeshLambertMaterial({map:tex(120)}),
- dirt:new THREE.MeshLambertMaterial({map:tex(100)}),
- stone:new THREE.MeshLambertMaterial({map:tex(80)})
-};
-
+// ===== BLOCK =====
 const geo=new THREE.BoxGeometry(1,1,1);
+const mat=new THREE.MeshLambertMaterial({color:0x55aa55});
 
 // ===== WORLD =====
-const SIZE=50, HALF=SIZE/2;
-let world=[];
+const SIZE=50;
+const HALF=SIZE/2;
 
-function generate(){
- for(let x=-HALF;x<HALF;x++){
-  for(let z=-HALF;z<HALF;z++){
-   for(let y=0;y<3;y++){
-    world.push({x,y,z,type:y===2?"grass":"dirt"});
-   }
-   for(let y=-1;y>-10;y++){
-    world.push({x,y,z,type:"stone"});
-   }
+const world=new Map();
+const meshes=new Map();
+
+const key=(x,y,z)=>`${x},${y},${z}`;
+
+function addBlock(x,y,z){
+ const k=key(x,y,z);
+ if(world.has(k)) return;
+
+ const m=new THREE.Mesh(geo,mat);
+ m.position.set(x,y,z);
+
+ scene.add(m);
+ world.set(k,true);
+ meshes.set(k,m);
+}
+
+function removeBlock(x,y,z){
+ const k=key(x,y,z);
+ if(meshes.has(k)){
+  scene.remove(meshes.get(k));
+  meshes.delete(k);
+  world.delete(k);
+ }
+}
+
+// generate flat world
+for(let x=-HALF;x<HALF;x++){
+ for(let z=-HALF;z<HALF;z++){
+  for(let y=0;y<3;y++){
+   addBlock(x,y,z);
   }
  }
 }
-generate();
-
-// ===== BUILD =====
-let meshes={};
-
-function build(){
- for(const m in meshes) scene.remove(meshes[m]);
- meshes={};
-
- const groups={};
- world.forEach(b=>{
-  if(!groups[b.type]) groups[b.type]=[];
-  groups[b.type].push(b);
- });
-
- for(const type in groups){
-  const arr=groups[type];
-  const mesh=new THREE.InstancedMesh(geo,mats[type],arr.length);
-
-  const m=new THREE.Matrix4();
-  arr.forEach((b,i)=>{
-   m.setPosition(b.x,b.y,b.z);
-   mesh.setMatrixAt(i,m);
-  });
-
-  scene.add(mesh);
-  meshes[type]=mesh;
- }
-}
-build();
 
 // ===== COLLISION =====
 function collide(px,py,pz){
- for(const b of world){
-  if(Math.abs(px-b.x)<0.5 &&
-     Math.abs(py-b.y)<HEIGHT &&
-     Math.abs(pz-b.z)<0.5)
-     return true;
+ for(let x=Math.floor(px-WIDTH);x<=Math.floor(px+WIDTH);x++){
+  for(let y=Math.floor(py);y<=Math.floor(py+HEIGHT);y++){
+   for(let z=Math.floor(pz-WIDTH);z<=Math.floor(pz+WIDTH);z++){
+    if(world.has(key(x,y,z))) return true;
+   }
+  }
  }
  return false;
 }
 
 // ===== PHYSICS =====
-let vy=0,onGround=false;
-const gravity=-0.02,jump=0.35;
+let vy=0;
+let onGround=false;
 
-camera.position.set(0,10,10);
+const gravity=-0.02;
+const jump=0.35;
+
+camera.position.set(0,5,5);
 
 // ===== RAY =====
 const ray=new THREE.Raycaster();
@@ -205,27 +154,29 @@ function animate(){
 
  const speed=0.15;
 
- const f=new THREE.Vector3();
- camera.getWorldDirection(f); f.y=0; f.normalize();
+ const forward=new THREE.Vector3();
+ camera.getWorldDirection(forward);
+ forward.y=0;
+ forward.normalize();
 
- const r=new THREE.Vector3();
- r.crossVectors(f,new THREE.Vector3(0,1,0)).normalize();
+ const right=new THREE.Vector3();
+ right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- let dx=0,dz=0;
+ let nx=camera.position.x;
+ let nz=camera.position.z;
 
- if(keys["KeyW"]){dx+=f.x*speed;dz+=f.z*speed;}
- if(keys["KeyS"]){dx-=f.x*speed;dz-=f.z*speed;}
- if(keys["KeyA"]){dx-=r.x*speed;dz-=r.z*speed;}
- if(keys["KeyD"]){dx+=r.x*speed;dz+=r.z*speed;}
+ if(keys["KeyW"]){nx+=forward.x*speed;nz+=forward.z*speed;}
+ if(keys["KeyS"]){nx-=forward.x*speed;nz-=forward.z*speed;}
+ if(keys["KeyA"]){nx-=right.x*speed;nz-=right.z*speed;}
+ if(keys["KeyD"]){nx+=right.x*speed;nz+=right.z*speed;}
 
- let nx=camera.position.x+dx;
- let nz=camera.position.z+dz;
-
- if(!collide(nx,camera.position.y-EYE,camera.position.z))
+ if(!collide(nx,camera.position.y-EYE,camera.position.z)){
   camera.position.x=nx;
+ }
 
- if(!collide(camera.position.x,camera.position.y-EYE,nz))
+ if(!collide(camera.position.x,camera.position.y-EYE,nz)){
   camera.position.z=nz;
+ }
 
  // gravity
  vy+=gravity;
@@ -236,39 +187,34 @@ function animate(){
    camera.position.y=Math.floor(ny-EYE)+EYE+1;
    vy=0;
    onGround=true;
-  } else camera.position.y=ny;
- } else camera.position.y=ny;
+  } else {
+   camera.position.y=ny;
+   onGround=false;
+  }
+ } else {
+  camera.position.y=ny;
+ }
 
  if(keys["Space"] && onGround){
   vy=jump;
   onGround=false;
  }
 
- // break blocks
+ // ===== BREAK BLOCK =====
  ray.setFromCamera({x:0,y:0},camera);
- const hits=ray.intersectObjects(Object.values(meshes));
+ const hits=ray.intersectObjects([...meshes.values()]);
 
  if(hits.length){
-  const p=hits[0].point;
-  const bx=Math.round(p.x);
-  const by=Math.round(p.y);
-  const bz=Math.round(p.z);
+  const pos=hits[0].object.position;
 
   if(breaking){
    breakTimer++;
-   if(breakTimer>10){
-    const i=world.findIndex(b=>b.x===bx&&b.y===by&&b.z===bz);
-    if(i!==-1){
-     world.splice(i,1);
-     build();
-    }
+   if(breakTimer>8){
+    removeBlock(pos.x,pos.y,pos.z);
     breakTimer=0;
    }
   } else breakTimer=0;
  }
-
- // HUD
- hud.innerText="Health: "+health;
 
  renderer.render(scene,camera);
 }
