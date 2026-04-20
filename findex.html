@@ -2,11 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Fixed Voxel Engine</title>
+<title>Ultimate Voxel Engine</title>
 
 <style>
 body { margin:0; overflow:hidden; }
-#overlay {
+#overlay{
  position:absolute; inset:0;
  background:black;
  color:white;
@@ -25,7 +25,7 @@ body { margin:0; overflow:hidden; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-// ================= LIGHTING FIX =================
+// ================= SCENE =================
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
@@ -51,27 +51,36 @@ const mat={
 };
 
 // ================= WORLD =================
-const world=new Map();
 const geo=new THREE.BoxGeometry(1,1,1);
+const world=new Map();
 
 function key(x,y,z){return `${x},${y},${z}`;}
 
 class Block{
- constructor(x,y,z,mesh){
+ constructor(x,y,z,type,mesh){
   this.x=x;
   this.y=y;
   this.z=z;
+  this.type=type;
   this.mesh=mesh;
   this.solid=true;
  }
 }
 
-function addBlock(x,y,z,m){
- const mesh=new THREE.Mesh(geo,m);
+function addBlock(x,y,z,type,material){
+ const mesh=new THREE.Mesh(geo,material);
  mesh.position.set(x,y,z);
  scene.add(mesh);
 
- world.set(key(x,y,z),new Block(x,y,z,mesh));
+ world.set(key(x,y,z),new Block(x,y,z,type,mesh));
+}
+
+function removeBlock(x,y,z){
+ const k=key(x,y,z);
+ const b=world.get(k);
+ if(!b) return;
+ scene.remove(b.mesh);
+ world.delete(k);
 }
 
 function getBlock(x,y,z){
@@ -81,41 +90,20 @@ function getBlock(x,y,z){
 // ================= WORLD GEN =================
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
-  addBlock(x,-1,z,mat.grass);
-  addBlock(x,-2,z,mat.dirt);
+  addBlock(x,-1,z,"grass",mat.grass);
+  addBlock(x,-2,z,"dirt",mat.dirt);
  }
 }
-
-// mountains (FIXED collision support)
-function mountain(cx,cz){
- for(let x=-10;x<=10;x++){
-  for(let z=-10;z<=10;z++){
-   const d=Math.sqrt(x*x+z*z);
-   const h=Math.floor(8-d);
-
-   if(h>0){
-    for(let y=0;y<h;y++){
-     addBlock(cx+x,y,cz+z,mat.stone);
-    }
-   }
-  }
- }
-}
-
-mountain(0,-30);
-mountain(0,30);
-mountain(-30,0);
-mountain(30,0);
 
 // trees
 function tree(x,z){
- for(let i=0;i<4;i++) addBlock(x,i,z,mat.wood);
+ for(let i=0;i<4;i++) addBlock(x,i,z,"wood",mat.wood);
 
  for(let lx=-2;lx<=2;lx++){
   for(let lz=-2;lz<=2;lz++){
    for(let ly=3;ly<=5;ly++){
     if(Math.abs(lx)+Math.abs(lz)<4){
-     addBlock(x+lx,ly,z+lz,mat.leaves);
+     addBlock(x+lx,ly,z+lz,"leaves",mat.leaves);
     }
    }
   }
@@ -126,6 +114,27 @@ tree(5,5);
 tree(-5,-5);
 tree(10,-10);
 tree(-10,10);
+
+// mountains
+function mountain(cx,cz){
+ for(let x=-10;x<=10;x++){
+  for(let z=-10;z<=10;z++){
+   const d=Math.sqrt(x*x+z*z);
+   const h=Math.floor(8-d);
+
+   if(h>0){
+    for(let y=0;y<h;y++){
+     addBlock(cx+x,y,cz+z,"stone",mat.stone);
+    }
+   }
+  }
+ }
+}
+
+mountain(0,-30);
+mountain(0,30);
+mountain(-30,0);
+mountain(30,0);
 
 // ================= CONTROLS =================
 const controls=new THREE.PointerLockControls(camera,document.body);
@@ -150,7 +159,7 @@ let onGround=false;
 
 const player={width:0.6,height:2,depth:0.6};
 
-// ================= COLLISION (FIXED PROPERLY) =================
+// ================= COLLISION =================
 function collides(x,y,z){
  const minX=x-player.width/2;
  const maxX=x+player.width/2;
@@ -172,9 +181,9 @@ function collides(x,y,z){
  return false;
 }
 
-// ================= MOVEMENT (NO TUNNELING FIX) =================
+// ================= MOVE =================
 function move(dx,dz){
- const steps=10;
+ const steps=8;
 
  for(let i=0;i<steps;i++){
   let sx=dx/steps;
@@ -212,6 +221,36 @@ window.onkeyup=e=>{
  if(e.code==="ArrowLeft")keys.left=false;
  if(e.code==="ArrowRight")keys.right=false;
 };
+
+// ================= RAYCAST (BREAK/PLACE) =================
+const raycaster=new THREE.Raycaster();
+
+window.addEventListener("mousedown",(e)=>{
+ raycaster.setFromCamera({x:0,y:0},camera);
+
+ const hits=raycaster.intersectObjects(scene.children);
+
+ if(!hits.length) return;
+
+ const obj=hits[0].object;
+ const pos=obj.position;
+
+ if(e.button===0){
+  removeBlock(pos.x,pos.y,pos.z);
+ }
+
+ if(e.button===2){
+  addBlock(
+   Math.round(pos.x),
+   Math.round(pos.y+1),
+   Math.round(pos.z),
+   "stone",
+   mat.stone
+  );
+ }
+});
+
+window.addEventListener("contextmenu",e=>e.preventDefault());
 
 // ================= LOOP =================
 camera.position.set(0,3,5);
