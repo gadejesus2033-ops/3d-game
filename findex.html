@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Movement Guaranteed</title>
+<title>Basic 3D World</title>
 <style>
 body{margin:0;overflow:hidden;background:black;}
 #overlay{
@@ -30,15 +30,10 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff));
-
-// floor
-const floor = new THREE.Mesh(
- new THREE.BoxGeometry(100,1,100),
- new THREE.MeshBasicMaterial({color:0x00ff00})
-);
-floor.position.y = -1;
-scene.add(floor);
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const light=new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
 
 // ===== CONTROLS =====
 const controls = new THREE.PointerLockControls(camera, document.body);
@@ -47,37 +42,77 @@ scene.add(controls.getObject());
 const overlay = document.getElementById("overlay");
 
 overlay.onclick = () => controls.lock();
+controls.addEventListener("lock",()=>overlay.style.display="none");
+controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
-controls.addEventListener("lock", () => {
- overlay.style.display="none";
-});
+// ===== PLAYER =====
+let velocityY = 0;
+let onGround = false;
 
-controls.addEventListener("unlock", () => {
- overlay.style.display="flex";
-});
+const gravity = -0.02;
+const jump = 0.3;
+
+// ===== WORLD =====
+const blocks = new Map();
+const key = (x,y,z)=>`${x},${y},${z}`;
+
+// create simple terrain
+for(let x=-20;x<20;x++){
+ for(let z=-20;z<20;z++){
+  let height = Math.floor(Math.sin(x*0.2)*2 + Math.cos(z*0.2)*2);
+
+  for(let y=-5;y<=height;y++){
+   blocks.set(key(x,y,z),1);
+
+   const cube = new THREE.Mesh(
+    new THREE.BoxGeometry(1,1,1),
+    new THREE.MeshLambertMaterial({color:0x3cb043})
+   );
+   cube.position.set(x,y,z);
+   scene.add(cube);
+  }
+ }
+}
+
+// ===== COLLISION =====
+function isSolid(x,y,z){
+ return blocks.has(key(x,y,z));
+}
+
+function collide(px,py,pz){
+
+ const minX = Math.floor(px - 0.3);
+ const maxX = Math.floor(px + 0.3);
+ const minY = Math.floor(py - 1.7);
+ const maxY = Math.floor(py);
+ const minZ = Math.floor(pz - 0.3);
+ const maxZ = Math.floor(pz + 0.3);
+
+ for(let x=minX;x<=maxX;x++){
+  for(let y=minY;y<=maxY;y++){
+   for(let z=minZ;z<=maxZ;z++){
+    if(isSolid(x,y,z)) return true;
+   }
+  }
+ }
+ return false;
+}
 
 // ===== INPUT =====
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
+const keys={};
 
-document.addEventListener("keydown", e => {
- if(e.code==="KeyW") moveForward = true;
- if(e.code==="KeyS") moveBackward = true;
- if(e.code==="KeyA") moveLeft = true;
- if(e.code==="KeyD") moveRight = true;
+document.addEventListener("keydown",e=>{
+ keys[e.code]=true;
+
+ if(e.code==="Space" && onGround){
+  velocityY = jump;
+ }
 });
 
-document.addEventListener("keyup", e => {
- if(e.code==="KeyW") moveForward = false;
- if(e.code==="KeyS") moveBackward = false;
- if(e.code==="KeyA") moveLeft = false;
- if(e.code==="KeyD") moveRight = false;
-});
+document.addEventListener("keyup",e=>keys[e.code]=false);
 
-// start
-camera.position.set(0,2,5);
+// ===== START =====
+camera.position.set(0,5,5);
 
 // ===== LOOP =====
 function animate(){
@@ -85,10 +120,54 @@ function animate(){
 
  const speed = 0.1;
 
- if(moveForward) controls.moveForward(speed);
- if(moveBackward) controls.moveForward(-speed);
- if(moveLeft) controls.moveRight(-speed);
- if(moveRight) controls.moveRight(speed);
+ // direction
+ const dir = new THREE.Vector3();
+ camera.getWorldDirection(dir);
+ dir.y = 0;
+ dir.normalize();
+
+ const right = new THREE.Vector3();
+ right.crossVectors(dir,new THREE.Vector3(0,1,0)).normalize();
+
+ // ===== MOVE X =====
+ let dx = 0;
+ let dz = 0;
+
+ if(keys["KeyW"]){dx+=dir.x*speed; dz+=dir.z*speed;}
+ if(keys["KeyS"]){dx-=dir.x*speed; dz-=dir.z*speed;}
+ if(keys["KeyA"]){dx-=right.x*speed; dz-=right.z*speed;}
+ if(keys["KeyD"]){dx+=right.x*speed; dz+=right.z*speed;}
+
+ let nx = camera.position.x + dx;
+ if(!collide(nx,camera.position.y,camera.position.z)){
+  camera.position.x = nx;
+ }
+
+ let nz = camera.position.z + dz;
+ if(!collide(camera.position.x,camera.position.y,nz)){
+  camera.position.z = nz;
+ }
+
+ // ===== GRAVITY =====
+ velocityY += gravity;
+ let ny = camera.position.y + velocityY;
+
+ if(velocityY <= 0){
+  if(collide(camera.position.x,ny,camera.position.z)){
+   camera.position.y = Math.floor(camera.position.y);
+   velocityY = 0;
+   onGround = true;
+  } else {
+   camera.position.y = ny;
+   onGround = false;
+  }
+ } else {
+  if(collide(camera.position.x,ny,camera.position.z)){
+   velocityY = 0;
+  } else {
+   camera.position.y = ny;
+  }
+ }
 
  renderer.render(scene,camera);
 }
