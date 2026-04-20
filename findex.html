@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine 100x100</title>
+<title>Voxel Game Complete</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -40,14 +40,16 @@ const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
 overlay.onclick=()=>controls.lock();
-controls.addEventListener("lock",()=>overlay.style.display="none");
-controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-const keys={},inventory={};
+const keys={},inventory={grass:10,dirt:10,stone:10,torch:5};
 let breaking=false;
 
-onkeydown=e=>keys[e.code]=true;
+onkeydown=e=>{
+ keys[e.code]=true;
+ if(e.code==="KeyK") saveGame();
+ if(e.code==="KeyL") loadGame();
+};
 onkeyup=e=>keys[e.code]=false;
 
 addEventListener("mousedown",e=>{
@@ -79,65 +81,78 @@ const mats={
  grass:new THREE.MeshLambertMaterial({map:tex(120)}),
  dirt:new THREE.MeshLambertMaterial({map:tex(100)}),
  stone:new THREE.MeshLambertMaterial({map:tex(80)}),
- coal:new THREE.MeshLambertMaterial({map:tex(60)}),
- iron:new THREE.MeshLambertMaterial({map:tex(150)})
+ torch:new THREE.MeshBasicMaterial({color:0xffaa00})
 };
 
 const geo=new THREE.BoxGeometry(1,1,1);
 
 // ===== WORLD =====
-const SIZE=100;
-const HALF=SIZE/2;
-
-const world=new Map();
-const blocks=new Map();
+const SIZE=50, HALF=SIZE/2;
+let world=[];
 const key=(x,y,z)=>`${x},${y},${z}`;
 
-function addItem(type){
- inventory[type]=(inventory[type]||0)+1;
-}
-
-function place(x,y,z,type){
- const k=key(x,y,z);
- if(blocks.has(k)) return;
-
- const b=new THREE.Mesh(geo,mats[type]);
- b.position.set(x,y,z);
- scene.add(b);
-
- blocks.set(k,b);
- world.set(k,type);
-}
-
-// ===== GENERATE =====
-for(let x=-HALF;x<HALF;x++){
- for(let z=-HALF;z<HALF;z++){
-
-  let surface=5;
-
-  // 4 layers grass/dirt
-  for(let y=surface;y>surface-4;y--){
-   place(x,y,z,y===surface?"grass":"dirt");
-  }
-
-  // 38 layers stone + ores
-  for(let y=surface-4;y>-38;y--){
-   let type="stone";
-
-   if(Math.random()<0.05) type="coal";
-   if(Math.random()<0.02) type="iron";
-
-   place(x,y,z,type);
+function generate(){
+ world=[];
+ for(let x=-HALF;x<HALF;x++){
+  for(let z=-HALF;z<HALF;z++){
+   for(let y=0;y<3;y++){
+    world.push({x,y,z,type:y===2?"grass":"dirt"});
+   }
+   for(let y=-1;y>-20;y--){
+    world.push({x,y,z,type:"stone"});
+   }
   }
  }
+}
+generate();
+
+// ===== BUILD =====
+let meshes={};
+
+function build(){
+ for(const m in meshes) scene.remove(meshes[m]);
+ meshes={};
+
+ const groups={};
+ world.forEach(b=>{
+  if(!groups[b.type]) groups[b.type]=[];
+  groups[b.type].push(b);
+ });
+
+ for(const type in groups){
+  const arr=groups[type];
+  const mesh=new THREE.InstancedMesh(geo,mats[type],arr.length);
+  const m=new THREE.Matrix4();
+
+  arr.forEach((b,i)=>{
+   m.setPosition(b.x,b.y,b.z);
+   mesh.setMatrixAt(i,m);
+  });
+
+  scene.add(mesh);
+  meshes[type]=mesh;
+ }
+}
+build();
+
+// ===== INVENTORY =====
+const items=["grass","dirt","stone","torch"];
+let selected=0;
+
+addEventListener("wheel",e=>{
+ selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
+});
+
+function addItem(t){
+ inventory[t]=(inventory[t]||0)+1;
 }
 
 // ===== COLLISION =====
 function collide(px,py,pz){
- for(let x=Math.floor(px-WIDTH);x<=Math.floor(px+WIDTH);x++)
- for(let y=Math.floor(py);y<=Math.floor(py+HEIGHT);y++)
- for(let z=Math.floor(pz-WIDTH);z<=Math.floor(pz+WIDTH);z++)
-  if(world.has(key(x,y,z))) return true;
+ for(const b of world){
+  if(Math.abs(px-b.x)<0.5&&Math.abs(py-b.y)<HEIGHT&&Math.abs(pz-b.z)<0.5)
+   return true;
+ }
  return false;
 }
 
@@ -145,19 +160,45 @@ function collide(px,py,pz){
 let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
 
-camera.position.set(0,20,0);
+camera.position.set(0,10,10);
 
-onkeydown=e=>{
- keys[e.code]=true;
- if(e.code==="Space"&&onGround){vy=jump;onGround=false;}
-};
-onkeyup=e=>keys[e.code]=false;
+// ===== MOBS =====
+const mobs=[];
+function spawnMob(){
+ const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0xff0000}));
+ m.position.set(Math.random()*20-10,5,Math.random()*20-10);
+ scene.add(m);
+ mobs.push({mesh:m,health:20});
+}
+setInterval(spawnMob,4000);
+
+// ===== TORCH LIGHT =====
+function addTorch(x,y,z){
+ const light=new THREE.PointLight(0xffaa00,1,8);
+ light.position.set(x,y,z);
+ scene.add(light);
+}
+
+// ===== SAVE / LOAD =====
+function saveGame(){
+ localStorage.setItem("world",JSON.stringify(world));
+ localStorage.setItem("inv",JSON.stringify(inventory));
+}
+function loadGame(){
+ const w=JSON.parse(localStorage.getItem("world"));
+ const i=JSON.parse(localStorage.getItem("inv"));
+ if(w&&i){
+  world=w;
+  Object.assign(inventory,i);
+  build();
+ }
+}
 
 // ===== RAY =====
 const ray=new THREE.Raycaster();
 ray.far=6;
 
-let breakTimer=0;
+let target=null,breakTimer=0;
 
 // ===== LOOP =====
 function animate(){
@@ -192,35 +233,66 @@ function animate(){
   } else camera.position.y=ny;
  } else camera.position.y=ny;
 
- // ===== BREAK =====
+ if(keys["Space"]&&onGround){vy=jump;onGround=false;}
+
+ // ===== RAY =====
  ray.setFromCamera({x:0,y:0},camera);
- const hits=ray.intersectObjects([...blocks.values()]);
+ const hits=ray.intersectObjects(Object.values(meshes));
 
  if(hits.length){
-  const pos=hits[0].object.position;
+  const p=hits[0].point;
+  const bx=Math.round(p.x);
+  const by=Math.round(p.y);
+  const bz=Math.round(p.z);
 
+  target={x:bx,y:by,z:bz};
+
+  // BREAK
   if(breaking){
    breakTimer++;
-   if(breakTimer>8){
-
-    const k=key(pos.x,pos.y,pos.z);
-
-    if(blocks.has(k)){
-     addItem(world.get(k));
-
-     scene.remove(blocks.get(k));
-     blocks.delete(k);
-     world.delete(k);
+   if(breakTimer>10){
+    const i=world.findIndex(b=>b.x===bx&&b.y===by&&b.z===bz);
+    if(i!==-1){
+     addItem(world[i].type);
+     world.splice(i,1);
+     build();
     }
-
     breakTimer=0;
    }
   } else breakTimer=0;
 
  } else breakTimer=0;
 
- // HUD
- hud.innerText="Inventory:\n"+JSON.stringify(inventory,null,1);
+ // PLACE
+ if(keys["ShiftLeft"] && target){
+  const t=items[selected];
+  if(inventory[t]>0){
+   const pos={x:target.x,y:target.y+1,z:target.z,type:t};
+   world.push(pos);
+   inventory[t]--;
+
+   if(t==="torch") addTorch(pos.x,pos.y,pos.z);
+
+   build();
+   keys["ShiftLeft"]=false;
+  }
+ }
+
+ // ===== MOBS =====
+ mobs.forEach(m=>{
+  const dir=new THREE.Vector3().subVectors(camera.position,m.mesh.position).normalize();
+  m.mesh.position.add(dir.multiplyScalar(0.02));
+
+  if(m.mesh.position.distanceTo(camera.position)<1){
+   health-=0.1;
+  }
+ });
+
+ // ===== HUD =====
+ hud.innerText=
+ "Health: "+Math.floor(health||100)+
+ "\nSelected: "+items[selected]+
+ "\n"+JSON.stringify(inventory,null,1);
 
  renderer.render(scene,camera);
 }
