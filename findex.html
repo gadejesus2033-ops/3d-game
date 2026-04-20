@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Base (No Gravity)</title>
+<title>Minecraft World</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -49,16 +49,18 @@ body{margin:0;overflow:hidden;background:black;}
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const camera = new THREE.PerspectiveCamera(
+75, innerWidth/innerHeight, 0.1, 1000
+);
 
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth,innerHeight);
+renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff));
 
 // =====================
-// CONTROLS (LOCKED MOVEMENT)
+// CONTROLS
 // =====================
 
 const controls = new THREE.PointerLockControls(camera, document.body);
@@ -80,7 +82,7 @@ controls.addEventListener("unlock",()=>{
 // INPUT
 // =====================
 
-const keys={};
+const keys = {};
 
 document.addEventListener("keydown",e=>keys[e.code]=true);
 document.addEventListener("keyup",e=>keys[e.code]=false);
@@ -95,24 +97,24 @@ function key(x,y,z){
  return `${x},${y},${z}`;
 }
 
-// terrain height
 function height(x,z){
  return Math.floor(
-  Math.sin(x*0.2)*2 +
-  Math.cos(z*0.2)*2
+  Math.sin(x * 0.12) * 4 +
+  Math.cos(z * 0.12) * 4 +
+  Math.sin((x+z) * 0.05) * 2
  );
 }
 
 const geo = new THREE.BoxGeometry(1,1,1);
 const mat = new THREE.MeshLambertMaterial({color:0x3cb043});
 
-// generate terrain
-for(let x=-30;x<30;x++){
- for(let z=-30;z<30;z++){
+// terrain
+for(let x=-60;x<60;x++){
+ for(let z=-60;z<60;z++){
 
   let h = height(x,z);
 
-  for(let y=-3;y<=h;y++){
+  for(let y=-5;y<=h;y++){
    world.set(key(x,y,z),1);
 
    const block = new THREE.Mesh(geo,mat);
@@ -152,10 +154,10 @@ function collide(px,py,pz){
 // START POSITION
 // =====================
 
-camera.position.set(0,5,10);
+camera.position.set(0,8,10);
 
 // =====================
-// LOOP (MINECRAFT MOVEMENT ONLY)
+// MOVEMENT LOOP
 // =====================
 
 function animate(){
@@ -163,7 +165,6 @@ function animate(){
 
  const speed = 0.15;
 
- // direction camera faces
  const forward = new THREE.Vector3();
  camera.getWorldDirection(forward);
  forward.y = 0;
@@ -172,7 +173,6 @@ function animate(){
  const right = new THREE.Vector3();
  right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
 
- // proposed movement
  let nx = camera.position.x;
  let nz = camera.position.z;
 
@@ -181,7 +181,6 @@ function animate(){
  if(keys["KeyA"]){nx -= right.x * speed; nz -= right.z * speed;}
  if(keys["KeyD"]){nx += right.x * speed; nz += right.z * speed;}
 
- // collision check
  if(!collide(nx,camera.position.y,camera.position.z)){
   camera.position.x = nx;
  }
