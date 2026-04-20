@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Fully Fixed</title>
+<title>Voxel Engine - Face Placement Fix</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -57,8 +57,8 @@ const meshes = [];
 
 const key = (x,y,z)=>`${x},${y},${z}`;
 
-function add(x,y,z,mat){
- const m=new THREE.Mesh(geo,mat);
+function add(x,y,z,material){
+ const m=new THREE.Mesh(geo,material);
  m.position.set(x,y,z);
  scene.add(m);
  meshes.push(m);
@@ -74,7 +74,7 @@ function remove(x,y,z){
  if(obj) scene.remove(obj);
 }
 
-// ================= WORLD GENERATION =================
+// ================= WORLD =================
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
   add(x,-1,z,mat.grass);
@@ -100,7 +100,7 @@ function solid(x,y,z){
  return world.has(`${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`);
 }
 
-function collides(px,py,pz){
+function collide(px,py,pz){
  const w=player.width/2;
  const d=player.depth/2;
 
@@ -121,9 +121,8 @@ function collides(px,py,pz){
  return false;
 }
 
-// ================= MOVEMENT (ENFORCED) =================
+// ================= MOVE =================
 function move(dx,dz){
-
  const steps=6;
 
  for(let i=0;i<steps;i++){
@@ -133,11 +132,11 @@ function move(dx,dz){
   let nx=camera.position.x+sx;
   let nz=camera.position.z+sz;
 
-  if(!collides(nx,camera.position.y,camera.position.z)){
+  if(!collide(nx,camera.position.y,camera.position.z)){
    camera.position.x=nx;
   }
 
-  if(!collides(camera.position.x,camera.position.y,nz)){
+  if(!collide(camera.position.x,camera.position.y,nz)){
    camera.position.z=nz;
   }
  }
@@ -185,25 +184,39 @@ window.addEventListener("mousedown",e=>{
  ray.setFromCamera({x:0,y:0},camera);
 
  const hits=ray.intersectObjects(meshes);
- if(!hits.length)return;
+ if(!hits.length) return;
 
- const p=hits[0].object.position;
+ const hit=hits[0];
 
- const x=Math.floor(p.x);
- const y=Math.floor(p.y);
- const z=Math.floor(p.z);
+ const pos=hit.object.position;
 
- if(e.button===0) remove(x,y,z);
+ const x=Math.floor(pos.x);
+ const y=Math.floor(pos.y);
+ const z=Math.floor(pos.z);
+
+ // LEFT CLICK = BREAK
+ if(e.button===0){
+  remove(x,y,z);
+ }
+
+ // RIGHT CLICK = PLACE ON FACE (FIXED)
  if(e.button===2){
-  if(!world.has(key(x,y+1,z))){
-   add(x,y+1,z,mat.stone);
+
+  const n=hit.face.normal;
+
+  const px=x+n.x;
+  const py=y+n.y;
+  const pz=z+n.z;
+
+  if(!world.has(key(px,py,pz))){
+   add(px,py,pz,mat.stone);
   }
  }
 });
 
 window.addEventListener("contextmenu",e=>e.preventDefault());
 
-// ================= START POSITION =================
+// ================= START =================
 camera.position.set(0,5,5);
 
 // ================= LOOP =================
@@ -229,13 +242,13 @@ function animate(){
 
  move(dx,dz);
 
- // ================= GRAVITY =================
+ // gravity
  velY+=gravity;
  camera.position.y+=velY;
 
  const feet=camera.position.y-player.height;
 
- if(collides(camera.position.x,feet,camera.position.z)){
+ if(collide(camera.position.x,feet,camera.position.z)){
   camera.position.y=Math.ceil(camera.position.y);
   velY=0;
   onGround=true;
