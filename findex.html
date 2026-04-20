@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Entity System</title>
+<title>Voxel Engine Full</title>
 
 <style>
 body { margin:0; overflow:hidden; }
@@ -26,14 +26,14 @@ body { margin:0; overflow:hidden; }
 
 <script>
 // ================= TEXTURES =================
-function tex(c1,c2){
+function tex(a,b){
  const c=document.createElement("canvas");
  c.width=16;c.height=16;
  const ctx=c.getContext("2d");
 
  for(let x=0;x<16;x++){
   for(let y=0;y<16;y++){
-   ctx.fillStyle=Math.random()>0.5?c1:c2;
+   ctx.fillStyle=Math.random()>0.5?a:b;
    ctx.fillRect(x,y,1,1);
   }
  }
@@ -43,11 +43,13 @@ function tex(c1,c2){
  return t;
 }
 
-const grass=new THREE.MeshLambertMaterial({map:tex("#3cb043","#2e8b3c")});
-const dirt=new THREE.MeshLambertMaterial({map:tex("#8b5a2b","#6e4420")});
-const stone=new THREE.MeshLambertMaterial({map:tex("#888","#666")});
-const wood=new THREE.MeshLambertMaterial({map:tex("#a0522d","#7b3f00")});
-const leaves=new THREE.MeshLambertMaterial({map:tex("#2ecc71","#27ae60")});
+const mat={
+ grass:new THREE.MeshLambertMaterial({map:tex("#3cb043","#2e8b3c")}),
+ dirt:new THREE.MeshLambertMaterial({map:tex("#8b5a2b","#6e4420")}),
+ stone:new THREE.MeshLambertMaterial({map:tex("#888","#666")}),
+ wood:new THREE.MeshLambertMaterial({map:tex("#a0522d","#7b3f00")}),
+ leaves:new THREE.MeshLambertMaterial({map:tex("#2ecc71","#27ae60")})
+};
 
 // ================= SCENE =================
 const scene=new THREE.Scene();
@@ -58,73 +60,61 @@ const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const light=new THREE.DirectionalLight(0xffffff,1);
-light.position.set(5,10,5);
-scene.add(light);
+scene.add(new THREE.DirectionalLight(0xffffff,1).position.set(5,10,5));
 
 // ================= WORLD =================
-const world=new Map();
 const geo=new THREE.BoxGeometry(1,1,1);
+const world=new Map();
 
-function key(x,y,z){
- return `${x},${y},${z}`;
-}
+function key(x,y,z){return `${x},${y},${z}`;}
 
-const BLOCK={
- GRASS:"grass",
- DIRT:"dirt",
- STONE:"stone",
- WOOD:"wood",
- LEAVES:"leaves"
-};
-
-// ================= BLOCK ENTITY =================
-class BlockEntity{
- constructor(x,y,z,type,mesh,solid=true){
+class Block{
+ constructor(x,y,z,type,mesh){
   this.x=x;
   this.y=y;
   this.z=z;
   this.type=type;
   this.mesh=mesh;
-  this.solid=solid;
-  this.health=1;
+  this.solid=true;
  }
 }
 
-function addBlock(x,y,z,type,mat){
- const mesh=new THREE.Mesh(geo,mat);
+function addBlock(x,y,z,type,material){
+ const mesh=new THREE.Mesh(geo,material);
  mesh.position.set(x,y,z);
  scene.add(mesh);
 
- const entity=new BlockEntity(x,y,z,type,mesh,true);
- world.set(key(x,y,z),entity);
+ world.set(key(x,y,z), new Block(x,y,z,type,mesh));
+}
+
+function removeBlock(x,y,z){
+ const k=key(x,y,z);
+ const b=world.get(k);
+ if(!b) return;
+ scene.remove(b.mesh);
+ world.delete(k);
 }
 
 function getBlock(x,y,z){
  return world.get(key(Math.round(x),Math.floor(y),Math.round(z)));
 }
 
-// ================= WORLD GENERATION =================
-
-// ground
+// ================= WORLD GEN =================
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
-  addBlock(x,-1,z,BLOCK.GRASS,grass);
-  addBlock(x,-2,z,BLOCK.DIRT,dirt);
+  addBlock(x,-1,z,"grass",mat.grass);
+  addBlock(x,-2,z,"dirt",mat.dirt);
  }
 }
 
-// trees
 function tree(x,z){
- for(let i=0;i<4;i++){
-  addBlock(x,i,z,BLOCK.WOOD,wood);
- }
+ for(let i=0;i<4;i++) addBlock(x,i,z,"wood",mat.wood);
 
  for(let lx=-2;lx<=2;lx++){
   for(let lz=-2;lz<=2;lz++){
    for(let ly=3;ly<=5;ly++){
     if(Math.abs(lx)+Math.abs(lz)<4){
-     addBlock(x+lx,ly,z+lz,BLOCK.LEAVES,leaves);
+     addBlock(x+lx,ly,z+lz,"leaves",mat.leaves);
     }
    }
   }
@@ -136,7 +126,6 @@ tree(-5,-5);
 tree(10,-10);
 tree(-10,10);
 
-// mountains
 function mountain(cx,cz){
  for(let x=-10;x<=10;x++){
   for(let z=-10;z<=10;z++){
@@ -145,7 +134,7 @@ function mountain(cx,cz){
 
    if(h>0){
     for(let y=0;y<h;y++){
-     addBlock(cx+x,y,cz+z,BLOCK.STONE,stone);
+     addBlock(cx+x,y,cz+z,"stone",mat.stone);
     }
    }
   }
@@ -178,13 +167,56 @@ const gravity=-0.01;
 const jumpPower=0.2;
 let onGround=false;
 
+const player={width:0.6,height:2,depth:0.6};
+
+// ================= COLLISION =================
+function collides(x,y,z){
+ const minX=x-player.width/2;
+ const maxX=x+player.width/2;
+ const minY=y;
+ const maxY=y+player.height;
+ const minZ=z-player.depth/2;
+ const maxZ=z+player.depth/2;
+
+ for(let ix=Math.floor(minX);ix<=Math.floor(maxX);ix++){
+  for(let iy=Math.floor(minY);iy<=Math.floor(maxY);iy++){
+   for(let iz=Math.floor(minZ);iz<=Math.floor(maxZ);iz++){
+    const b=getBlock(ix,iy,iz);
+    if(b) return true;
+   }
+  }
+ }
+ return false;
+}
+
+// ================= MOVE =================
+function move(dx,dz){
+ const steps=8;
+
+ for(let i=0;i<steps;i++){
+  let sx=dx/steps;
+  let sz=dz/steps;
+
+  let nx=camera.position.x+sx;
+  let nz=camera.position.z+sz;
+
+  if(!collides(nx,camera.position.y,camera.position.z)){
+   camera.position.x=nx;
+  }
+  if(!collides(camera.position.x,camera.position.y,nz)){
+   camera.position.z=nz;
+  }
+ }
+}
+
+// ================= INPUT EVENTS =================
 window.onkeydown=e=>{
  if(e.code==="ArrowUp")keys.up=true;
  if(e.code==="ArrowDown")keys.down=true;
  if(e.code==="ArrowLeft")keys.left=true;
  if(e.code==="ArrowRight")keys.right=true;
 
- if(e.code==="Space" && onGround){
+ if(e.code==="Space"&&onGround){
   velocityY=jumpPower;
   onGround=false;
  }
@@ -197,21 +229,36 @@ window.onkeyup=e=>{
  if(e.code==="ArrowRight")keys.right=false;
 };
 
-// ================= COLLISION =================
-function blocked(x,y,z){
- const px=Math.round(x);
- const pz=Math.round(z);
+// ================= BREAK / PLACE =================
+const raycaster=new THREE.Raycaster();
 
- for(let dx=-0.3;dx<=0.3;dx+=0.3){
-  for(let dz=-0.3;dz<=0.3;dz+=0.3){
-   for(let h=0;h<2;h++){
-    const b=getBlock(px+dx,y+h,pz+dz);
-    if(b && b.solid) return true;
-   }
-  }
+window.addEventListener("mousedown",(e)=>{
+ raycaster.setFromCamera({x:0,y:0},camera);
+
+ const hits=raycaster.intersectObjects(scene.children);
+
+ if(hits.length===0) return;
+
+ const hit=hits[0].object;
+
+ const pos=hit.position;
+
+ if(e.button===0){
+  removeBlock(pos.x,pos.y,pos.z); // break
  }
- return false;
-}
+
+ if(e.button===2){
+  addBlock(
+   Math.round(pos.x),
+   Math.round(pos.y+1),
+   Math.round(pos.z),
+   "stone",
+   mat.stone
+  );
+ }
+});
+
+window.addEventListener("contextmenu",e=>e.preventDefault());
 
 // ================= LOOP =================
 camera.position.set(0,3,5);
@@ -236,33 +283,22 @@ function animate(){
  if(keys.left){mx-=right.x*speed;mz-=right.z*speed;}
  if(keys.right){mx+=right.x*speed;mz+=right.z*speed;}
 
-// X movement
-let nx=camera.position.x+mx;
-if(!blocked(nx,camera.position.y,camera.position.z)){
- camera.position.x=nx;
-}
+ move(mx,mz);
 
-// Z movement
-let nz=camera.position.z+mz;
-if(!blocked(camera.position.x,camera.position.y,nz)){
- camera.position.z=nz;
-}
+// gravity
+ velocityY+=gravity;
+ camera.position.y+=velocityY;
 
-// gravity + jump
-velocityY+=gravity;
-camera.position.y+=velocityY;
+ if(camera.position.y<=2){
+  camera.position.y=2;
+  velocityY=0;
+  onGround=true;
+ }
 
-if(camera.position.y<=2){
- camera.position.y=2;
- velocityY=0;
- onGround=true;
-}
-
-renderer.render(scene,camera);
+ renderer.render(scene,camera);
 }
 animate();
 
-// resize
 window.addEventListener("resize",()=>{
  camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();
