@@ -2,15 +2,17 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Engine - Chunk System</title>
+<title>Voxel Engine - True Solid Blocks</title>
 
 <style>
 body{margin:0;overflow:hidden;}
+
 #overlay{
  position:absolute;inset:0;background:#000;color:#fff;
  display:flex;align-items:center;justify-content:center;
  cursor:pointer;
 }
+
 #crosshair{
  position:fixed;left:50%;top:50%;
  width:10px;height:10px;transform:translate(-50%,-50%);
@@ -46,9 +48,14 @@ const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// ===== BLOCKS =====
+const BLOCK_GEO=new THREE.BoxGeometry(1,1,1);
+const BLOCK_MAT=new THREE.MeshLambertMaterial({color:0x3cb043});
+
 // ===== PLAYER =====
-const player={width:0.98,depth:0.98,height:2};
+const player={width:0.6,depth:0.6,height:1.8};
 let velY=0,onGround=false;
+
 const gravity=-0.015;
 const jump=0.22;
 
@@ -57,29 +64,36 @@ const CHUNK=16;
 const RENDER_DIST=3;
 
 const chunks=new Map();
+const chunkData=new Map();
 const world=new Map();
 
 const key=(x,y,z)=>`${x},${y},${z}`;
-const ckey=(cx,cz)=>`${cx},${cz}`;
+const ckey=(x,z)=>`${x},${z}`;
 
 // ===== NOISE =====
 function noise(x,z){
- return (
-  Math.sin(x*0.05)+
-  Math.cos(z*0.05)+
-  Math.sin((x+z)*0.03)
- )*6;
+ return (Math.sin(x*0.05)+Math.cos(z*0.05))*6;
+}
+
+// ===== EXPOSED =====
+function isExposed(x,y,z,data){
+ return !(
+  data[key(x+1,y,z)] &&
+  data[key(x-1,y,z)] &&
+  data[key(x,y+1,z)] &&
+  data[key(x,y-1,z)] &&
+  data[key(x,y,z+1)] &&
+  data[key(x,y,z-1)]
+ );
 }
 
 // ===== CREATE CHUNK =====
 function createChunk(cx,cz){
 
- const geo=new THREE.BoxGeometry(1,1,1);
- const mat=new THREE.MeshLambertMaterial({color:0x3cb043});
-
- const inst=new THREE.InstancedMesh(geo,mat,5000);
+ const inst=new THREE.InstancedMesh(BLOCK_GEO,BLOCK_MAT,6000);
  const dummy=new THREE.Object3D();
 
+ let data={};
  let i=0;
 
  for(let x=0;x<CHUNK;x++){
@@ -87,17 +101,22 @@ function createChunk(cx,cz){
 
    let wx=cx*CHUNK+x;
    let wz=cz*CHUNK+z;
-
    let h=Math.floor(noise(wx,wz));
 
    for(let y=-6;y<=h;y++){
-
-    dummy.position.set(wx,y,wz);
-    dummy.updateMatrix();
-    inst.setMatrixAt(i++,dummy.matrix);
-
-    world.set(key(wx,y,wz),1);
+    const k=key(wx,y,wz);
+    data[k]=1;
+    world.set(k,1);
    }
+  }
+ }
+
+ for(const k in data){
+  const [x,y,z]=k.split(",").map(Number);
+  if(isExposed(x,y,z,data)){
+   dummy.position.set(x,y,z);
+   dummy.updateMatrix();
+   inst.setMatrixAt(i++,dummy.matrix);
   }
  }
 
@@ -106,19 +125,48 @@ function createChunk(cx,cz){
 
  scene.add(inst);
  chunks.set(ckey(cx,cz),inst);
+ chunkData.set(ckey(cx,cz),data);
 }
 
-// ===== LOAD CHUNKS =====
-function updateChunks(){
+// ===== REBUILD =====
+function rebuildChunk(cx,cz){
 
+ const id=ckey(cx,cz);
+ const old=chunks.get(id);
+ if(old) scene.remove(old);
+
+ const data=chunkData.get(id);
+ if(!data) return;
+
+ const inst=new THREE.InstancedMesh(BLOCK_GEO,BLOCK_MAT,6000);
+ const dummy=new THREE.Object3D();
+
+ let i=0;
+
+ for(const k in data){
+  const [x,y,z]=k.split(",").map(Number);
+  if(isExposed(x,y,z,data)){
+   dummy.position.set(x,y,z);
+   dummy.updateMatrix();
+   inst.setMatrixAt(i++,dummy.matrix);
+  }
+ }
+
+ inst.count=i;
+ inst.instanceMatrix.needsUpdate=true;
+
+ scene.add(inst);
+ chunks.set(id,inst);
+}
+
+// ===== LOAD / UNLOAD =====
+function updateChunks(){
  const cx=Math.floor(camera.position.x/CHUNK);
  const cz=Math.floor(camera.position.z/CHUNK);
 
  for(let x=-RENDER_DIST;x<=RENDER_DIST;x++){
   for(let z=-RENDER_DIST;z<=RENDER_DIST;z++){
-
    const id=ckey(cx+x,cz+z);
-
    if(!chunks.has(id)){
     createChunk(cx+x,cz+z);
    }
@@ -126,7 +174,21 @@ function updateChunks(){
  }
 }
 
-// ===== COLLISION =====
+function unloadChunks(){
+ const cx=Math.floor(camera.position.x/CHUNK);
+ const cz=Math.floor(camera.position.z/CHUNK);
+
+ for(const id of chunks.keys()){
+  const [x,z]=id.split(",").map(Number);
+  if(Math.abs(x-cx)>RENDER_DIST+1 || Math.abs(z-cz)>RENDER_DIST+1){
+   scene.remove(chunks.get(id));
+   chunks.delete(id);
+   chunkData.delete(id);
+  }
+ }
+}
+
+// ===== FULL BODY COLLISION =====
 function collide(px,py,pz){
 
  const hw=player.width/2;
@@ -134,8 +196,8 @@ function collide(px,py,pz){
 
  const minX=Math.floor(px-hw);
  const maxX=Math.floor(px+hw);
- const minY=Math.floor(py);
- const maxY=Math.floor(py+player.height-0.001);
+ const minY=Math.floor(py-player.height);
+ const maxY=Math.floor(py-0.001);
  const minZ=Math.floor(pz-hd);
  const maxZ=Math.floor(pz+hd);
 
@@ -145,17 +207,6 @@ function collide(px,py,pz){
     if(world.has(`${x},${y},${z}`)) return true;
    }
   }
- }
- return false;
-}
-
-// ===== STEP =====
-function tryStep(nx,nz){
- const step=1;
-
- if(!collide(nx,camera.position.y+step,nz)){
-  camera.position.y+=step;
-  return true;
  }
  return false;
 }
@@ -173,15 +224,45 @@ function move(dx,dz){
   let nx=camera.position.x+sx;
   if(!collide(nx,camera.position.y,camera.position.z)){
    camera.position.x=nx;
-  } else if(tryStep(nx,camera.position.z)){
-   camera.position.x=nx;
   }
 
   let nz=camera.position.z+sz;
   if(!collide(camera.position.x,camera.position.y,nz)){
    camera.position.z=nz;
-  } else if(tryStep(camera.position.x,nz)){
-   camera.position.z=nz;
+  }
+ }
+}
+
+// ===== GRAVITY =====
+function applyGravity(){
+
+ velY+=gravity;
+
+ let steps=Math.ceil(Math.abs(velY)/0.1);
+ let stepY=velY/steps;
+
+ onGround=false;
+
+ for(let i=0;i<steps;i++){
+
+  let ny=camera.position.y+stepY;
+
+  if(stepY<=0){
+   if(collide(camera.position.x,ny,camera.position.z)){
+    camera.position.y=Math.floor(camera.position.y);
+    velY=0;
+    onGround=true;
+    break;
+   } else {
+    camera.position.y=ny;
+   }
+  } else {
+   if(collide(camera.position.x,ny,camera.position.z)){
+    velY=0;
+    break;
+   } else {
+    camera.position.y=ny;
+   }
   }
  }
 }
@@ -207,7 +288,6 @@ onkeydown=e=>{
 
  if(e.code==="Space"&&onGround){
   velY=jump;
-  onGround=false;
  }
 };
 
@@ -218,13 +298,72 @@ onkeyup=e=>{
  if(e.code==="KeyD")k.d=false;
 };
 
-// ===== LOOP =====
+// ===== BLOCK EDIT =====
+const ray=new THREE.Raycaster();
+
+addEventListener("mousedown",e=>{
+
+ ray.setFromCamera({x:0,y:0},camera);
+ const hits=ray.intersectObjects([...chunks.values()]);
+ if(!hits.length) return;
+
+ const hit=hits[0];
+ const p=hit.point.clone().floor();
+ const n=hit.face.normal.clone();
+
+ const bx=p.x,by=p.y,bz=p.z;
+
+ const cx=Math.floor(bx/CHUNK);
+ const cz=Math.floor(bz/CHUNK);
+
+ const data=chunkData.get(ckey(cx,cz));
+
+ // BREAK
+ if(e.button===0){
+  const k=key(bx,by,bz);
+  if(data && data[k]){
+   delete data[k];
+   world.delete(k);
+   rebuildChunk(cx,cz);
+  }
+ }
+
+ // PLACE (now fully solid-safe)
+ if(e.button===2){
+
+  const px=bx+n.x;
+  const py=by+n.y;
+  const pz=bz+n.z;
+
+  // prevent placing inside player
+  if(collide(px+0.5,py+1,pz+0.5)) return;
+
+  const pcx=Math.floor(px/CHUNK);
+  const pcz=Math.floor(pz/CHUNK);
+
+  const pdata=chunkData.get(ckey(pcx,pcz));
+  const k=key(px,py,pz);
+
+  if(pdata && !pdata[k]){
+   pdata[k]=1;
+   world.set(k,1);
+   rebuildChunk(pcx,pcz);
+  }
+ }
+
+});
+
+addEventListener("contextmenu",e=>e.preventDefault());
+
+// ===== START =====
 camera.position.set(0,10,5);
 
+// ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
  updateChunks();
+ unloadChunks();
 
  const speed=0.12;
 
@@ -244,27 +383,7 @@ function animate(){
  if(k.d){dx+=right.x*speed;dz+=right.z*speed;}
 
  move(dx,dz);
-
- // gravity
- velY+=gravity;
- let ny=camera.position.y+velY;
-
- if(velY<=0){
-  if(collide(camera.position.x,ny-player.height,camera.position.z)){
-   camera.position.y=Math.floor(camera.position.y);
-   velY=0;
-   onGround=true;
-  } else {
-   camera.position.y=ny;
-   onGround=false;
-  }
- } else {
-  if(collide(camera.position.x,ny,camera.position.z)){
-   velY=0;
-  } else {
-   camera.position.y=ny;
-  }
- }
+ applyGravity();
 
  renderer.render(scene,camera);
 }
