@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Final</title>
+<title>Voxel Game - Minecraft Style Breaking</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -11,7 +11,7 @@ body{margin:0;overflow:hidden;background:black;}
 #crosshair:before,#crosshair:after{content:"";position:absolute;background:white;}
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
-#hud{position:fixed;bottom:10px;left:10px;color:white;font-family:sans-serif;}
+#hud{position:fixed;bottom:10px;left:10px;color:white;font-family:sans-serif;white-space:pre;}
 </style>
 </head>
 
@@ -199,25 +199,39 @@ function getTarget(){
  return hits.length?hits[0]:null;
 }
 
-// ===== BREAK =====
+// ===== MINECRAFT BREAK SYSTEM =====
 let breakProgress=0;
+let targetBlock=null;
 
 function updateBreak(){
 
- if(!mouseDown){breakProgress=0;return;}
+ if(!mouseDown){
+  breakProgress=0;
+  targetBlock=null;
+  return;
+ }
 
  const hit=getTarget();
- if(!hit) return;
+ if(!hit){
+  breakProgress=0;
+  targetBlock=null;
+  return;
+ }
 
  const p=hit.object.position;
  const k=key(p.x,p.y,p.z);
+
+ if(targetBlock!==k){
+  targetBlock=k;
+  breakProgress=0;
+ }
+
  const block=world.get(k);
+ const rule=blockRules[block];
+ if(!rule) return;
 
  const toolName=items[selected];
  const tool=toolData[toolName];
- const rule=blockRules[block];
-
- if(!rule) return;
 
  if(rule.tool && (!tool || tool.type!==rule.tool)){
   breakProgress=0;
@@ -226,6 +240,7 @@ function updateBreak(){
 
  let speed=0.02;
  if(tool) speed*=tool.speed;
+ else speed*=0.5;
 
  breakProgress+=speed;
 
@@ -233,6 +248,7 @@ function updateBreak(){
   inv[block]=(inv[block]||0)+1;
   remove(p.x,p.y,p.z);
   breakProgress=0;
+  targetBlock=null;
  }
 
 }
@@ -321,7 +337,9 @@ function animate(){
   onGround=false;
  }
 
- hud.innerText="Slot "+(selected+1)+": "+items[selected]+" ("+inv[items[selected]]+")";
+ hud.innerText=
+ "Slot "+(selected+1)+": "+items[selected]+" ("+inv[items[selected]]+")"+
+ "\nBreaking: "+Math.floor(breakProgress*100)+"%";
 
  renderer.render(scene,camera);
 }
