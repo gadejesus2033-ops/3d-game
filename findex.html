@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Tools + Forest</title>
+<title>Voxel Game Minecraft Tools</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -47,13 +47,21 @@ controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
 const keys={};
+let mouseDown=false;
+
 onkeydown=e=>keys[e.code]=true;
 onkeyup=e=>keys[e.code]=false;
+
+document.addEventListener("mousedown",e=>{
+ if(e.button===0) mouseDown=true;
+});
+document.addEventListener("mouseup",e=>{
+ if(e.button===0) mouseDown=false;
+});
 
 // ===== PLAYER =====
 let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
-
 camera.position.set(0,15,10);
 
 // ===== TEXTURES =====
@@ -107,45 +115,40 @@ function remove(x,y,z){
  }
 }
 
-// terrain height
+// terrain
 function height(x,z){
  return Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2);
 }
 
-// generate world
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
 
   let h=height(x,z)+6;
 
   add(x,h,z,"grass");
-
   for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
   for(let y=h-4;y>-20;y--) add(x,y,z,"stone");
 
-  // ===== FOREST ZONES =====
+  // forest zones
   let forest=Math.sin(x*0.08)+Math.cos(z*0.08);
-
   if(forest>0.6 && Math.random()<0.12){
 
-   // trunk
    for(let i=1;i<=4;i++) add(x,h+i,z,"wood");
 
-   // leaves
    for(let dx=-2;dx<=2;dx++)
    for(let dz=-2;dz<=2;dz++)
    for(let dy=3;dy<=5;dy++)
     if(Math.random()>0.3)
      add(x+dx,h+dy,z+dz,"leaves");
   }
-
  }
 }
 
-// ===== INVENTORY + TOOLS =====
+// ===== INVENTORY =====
 const inv={
  grass:0,dirt:0,stone:0,wood:0,leaves:0,
- pickaxe:1,axe:1
+ wooden_pickaxe:1,
+ wooden_axe:1
 };
 
 const items=Object.keys(inv);
@@ -155,19 +158,20 @@ addEventListener("wheel",e=>{
  selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
 });
 
-addEventListener("keydown",e=>{
- if(e.code==="Digit1") selected=0;
- if(e.code==="Digit2") selected=1;
- if(e.code==="Digit3") selected=2;
-});
+// ===== TOOL DATA =====
+const toolData={
+ wooden_pickaxe:{type:"pickaxe",speed:1},
+ wooden_axe:{type:"axe",speed:1.5}
+};
 
-// ===== TOOL RULES =====
-function canBreak(block,tool){
- if(block==="stone") return tool==="pickaxe";
- if(block==="wood") return tool==="axe";
- if(block==="grass"||block==="dirt"||block==="leaves") return true;
- return false;
-}
+// ===== BLOCK RULES =====
+const blockRules={
+ grass:{tool:null,hardness:1},
+ dirt:{tool:null,hardness:1},
+ leaves:{tool:null,hardness:0.5},
+ wood:{tool:"axe",hardness:2},
+ stone:{tool:"pickaxe",hardness:3}
+};
 
 // ===== RAY =====
 const ray=new THREE.Raycaster();
@@ -179,23 +183,43 @@ function getTarget(){
  return hits.length?hits[0]:null;
 }
 
-// ===== BREAK =====
-document.addEventListener("mousedown",e=>{
- if(e.button===0){
-  const hit=getTarget();
-  if(!hit) return;
+// ===== BREAK SYSTEM =====
+let breakProgress=0;
 
-  const p=hit.object.position;
-  const k=key(p.x,p.y,p.z);
-  const block=world.get(k);
-  const tool=items[selected];
+function updateBreak(){
 
-  if(!canBreak(block,tool)) return;
+ if(!mouseDown){breakProgress=0;return;}
 
+ const hit=getTarget();
+ if(!hit) return;
+
+ const p=hit.object.position;
+ const k=key(p.x,p.y,p.z);
+ const block=world.get(k);
+
+ const toolName=items[selected];
+ const tool=toolData[toolName];
+ const rule=blockRules[block];
+
+ if(!rule) return;
+
+ if(rule.tool && (!tool || tool.type!==rule.tool)){
+  breakProgress=0;
+  return;
+ }
+
+ let speed=0.02;
+ if(tool) speed*=tool.speed;
+
+ breakProgress+=speed;
+
+ if(breakProgress>=rule.hardness){
   inv[block]=(inv[block]||0)+1;
   remove(p.x,p.y,p.z);
+  breakProgress=0;
  }
-});
+
+}
 
 // ===== PLACE =====
 document.addEventListener("contextmenu",e=>e.preventDefault());
@@ -236,6 +260,8 @@ function collide(px,py,pz){
 function animate(){
  requestAnimationFrame(animate);
 
+ updateBreak();
+
  const speed=keys["ShiftLeft"]?0.2:0.12;
 
  const f=new THREE.Vector3();
@@ -260,7 +286,6 @@ function animate(){
  if(!collide(camera.position.x,camera.position.y-1.6,nz))
   camera.position.z=nz;
 
- // gravity
  vy+=gravity;
  let ny=camera.position.y+vy;
 
@@ -276,10 +301,7 @@ function animate(){
   onGround=false;
  }
 
- // HUD
- hud.innerText=
- "Selected: "+items[selected]+
- " ("+inv[items[selected]]+")";
+ hud.innerText="Selected: "+items[selected]+" | "+inv[items[selected]];
 
  renderer.render(scene,camera);
 }
