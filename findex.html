@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Textured</title>
+<title>Voxel Game Trees + Inventory</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -47,27 +47,18 @@ controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
 const keys={};
-let breaking=false;
 
 onkeydown=e=>keys[e.code]=true;
 onkeyup=e=>keys[e.code]=false;
-
-onmousedown=e=>{
- if(e.button===0) breaking=true;
- if(e.button===2) placeBlock();
-};
-onmouseup=e=>{
- if(e.button===0) breaking=false;
-};
 
 // ===== PLAYER =====
 let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
 
-camera.position.set(0,10,10);
+camera.position.set(0,12,10);
 
-// ===== 4x4 TEXTURE MAKER =====
-function makeTexture(colors){
+// ===== 4x4 TEXTURE =====
+function tex(colors){
  const c=document.createElement("canvas");
  c.width=4;c.height=4;
  const ctx=c.getContext("2d");
@@ -80,22 +71,17 @@ function makeTexture(colors){
  }
 
  const t=new THREE.CanvasTexture(c);
- t.magFilter=THREE.NearestFilter;
- t.minFilter=THREE.NearestFilter;
+ t.magFilter=t.minFilter=THREE.NearestFilter;
  return t;
 }
 
 // ===== MATERIALS =====
 const mats={
- grass:new THREE.MeshLambertMaterial({
-  map:makeTexture(["#55aa55","#4c9c4c","#3f8f3f"])
- }),
- dirt:new THREE.MeshLambertMaterial({
-  map:makeTexture(["#8B4513","#7a3d10","#6b3410"])
- }),
- stone:new THREE.MeshLambertMaterial({
-  map:makeTexture(["#888","#777","#666"])
- })
+ grass:new THREE.MeshLambertMaterial({map:tex(["#55aa55","#4c9c4c"])}),
+ dirt:new THREE.MeshLambertMaterial({map:tex(["#8B4513","#7a3d10"])}),
+ stone:new THREE.MeshLambertMaterial({map:tex(["#888","#777"])}),
+ wood:new THREE.MeshLambertMaterial({map:tex(["#8b5a2b","#7a4a20"])}),
+ leaves:new THREE.MeshLambertMaterial({map:tex(["#2e8b57","#3fa36f"])})
 };
 
 const geo=new THREE.BoxGeometry(1,1,1);
@@ -107,8 +93,9 @@ const key=(x,y,z)=>`${x},${y},${z}`;
 
 function add(x,y,z,t){
  const k=key(x,y,z);
- world.set(k,t);
+ if(world.has(k)) return;
 
+ world.set(k,t);
  const m=new THREE.Mesh(geo,mats[t]);
  m.position.set(x,y,z);
  scene.add(m);
@@ -124,21 +111,34 @@ function remove(x,y,z){
  }
 }
 
-// terrain
+// terrain + trees
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
+
   let h=Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2)+5;
 
   add(x,h,z,"grass");
 
   for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
   for(let y=h-4;y>-10;y--) add(x,y,z,"stone");
+
+  // trees
+  if(Math.random()<0.08){
+   for(let i=1;i<=4;i++) add(x,h+i,z,"wood");
+
+   for(let dx=-2;dx<=2;dx++)
+   for(let dz=-2;dz<=2;dz++)
+   for(let dy=3;dy<=5;dy++)
+    if(Math.random()>0.3)
+     add(x+dx,h+dy,z+dz,"leaves");
+  }
+
  }
 }
 
 // ===== INVENTORY =====
-const inv={grass:0,dirt:0,stone:0};
-const items=["grass","dirt","stone"];
+const inv={grass:0,dirt:0,stone:0,wood:0,leaves:0};
+const items=Object.keys(inv);
 let selected=0;
 
 addEventListener("wheel",e=>{
@@ -167,27 +167,45 @@ function getTarget(){
 }
 
 // ===== BREAK =====
-let breakTimer=0;
+document.addEventListener("mousedown",e=>{
+ if(e.button===0){
+  const hit=getTarget();
+  if(!hit) return;
+
+  const p=hit.object.position;
+  const k=key(p.x,p.y,p.z);
+  const t=world.get(k);
+
+  if(t){
+   inv[t]++;
+   remove(p.x,p.y,p.z);
+  }
+ }
+});
 
 // ===== PLACE =====
-function placeBlock(){
- const hit=getTarget();
- if(!hit) return;
+document.addEventListener("contextmenu",e=>e.preventDefault());
 
- const n=hit.face.normal;
- const p=hit.object.position;
+document.addEventListener("mousedown",e=>{
+ if(e.button===2){
+  const hit=getTarget();
+  if(!hit) return;
 
- const x=p.x+n.x;
- const y=p.y+n.y;
- const z=p.z+n.z;
+  const n=hit.face.normal;
+  const p=hit.object.position;
 
- const type=items[selected];
+  const x=p.x+n.x;
+  const y=p.y+n.y;
+  const z=p.z+n.z;
 
- if(inv[type]>0 && !world.has(key(x,y,z))){
-  add(x,y,z,type);
-  inv[type]--;
+  const type=items[selected];
+
+  if(inv[type]>0 && !world.has(key(x,y,z))){
+   add(x,y,z,type);
+   inv[type]--;
+  }
  }
-}
+});
 
 // ===== LOOP =====
 function animate(){
@@ -233,19 +251,7 @@ function animate(){
   onGround=false;
  }
 
- // break
- const hit=getTarget();
- if(hit && breaking){
-  breakTimer++;
-  if(breakTimer>8){
-   const p=hit.object.position;
-   const t=world.get(key(p.x,p.y,p.z));
-   inv[t]++;
-   remove(p.x,p.y,p.z);
-   breakTimer=0;
-  }
- } else breakTimer=0;
-
+ // HUD
  hud.innerText="Block: "+items[selected]+" | "+inv[items[selected]];
 
  renderer.render(scene,camera);
@@ -254,6 +260,5 @@ function animate(){
 animate();
 
 </script>
-
 </body>
 </html>
