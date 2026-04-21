@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game - 1 Second Break</title>
+<title>Voxel Game Final</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -199,12 +199,16 @@ function getTarget(){
  return hits.length?hits[0]:null;
 }
 
-// ===== 1 SECOND BREAK SYSTEM =====
+// ===== TRUE 1-SECOND BREAK =====
 let breakProgress=0;
 let targetBlock=null;
-const BREAK_TIME=1.0;
+let lastTime=performance.now();
 
 function updateBreak(){
+
+ const now=performance.now();
+ const delta=(now-lastTime)/1000;
+ lastTime=now;
 
  if(!mouseDown){
   breakProgress=0;
@@ -239,13 +243,11 @@ function updateBreak(){
   return;
  }
 
- const delta=1/60;
-
  let speed=1;
  if(tool) speed=tool.speed;
  else speed=0.5;
 
- breakProgress += (delta*speed)/BREAK_TIME;
+ breakProgress += delta * speed;
 
  if(breakProgress>=1){
   inv[block]=(inv[block]||0)+1;
@@ -340,9 +342,12 @@ function animate(){
   onGround=false;
  }
 
+ // FAST VISUAL PROGRESS
+ const visual=Math.pow(breakProgress,0.5);
+
  hud.innerText=
  "Slot "+(selected+1)+": "+items[selected]+" ("+inv[items[selected]]+")"+
- "\nBreaking: "+Math.floor(breakProgress*100)+"%";
+ "\nBreaking: "+Math.floor(visual*100)+"%";
 
  renderer.render(scene,camera);
 }
