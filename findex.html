@@ -2,26 +2,13 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game</title>
+<title>Voxel Game Terrain</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
-
-#overlay{
- position:absolute;inset:0;
- display:flex;align-items:center;justify-content:center;
- color:white;font-family:sans-serif;
- background:black;
-}
-
-#crosshair{
- position:fixed;left:50%;top:50%;
- width:10px;height:10px;
- transform:translate(-50%,-50%);
-}
-#crosshair:before,#crosshair:after{
- content:"";position:absolute;background:white;
-}
+#overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;background:black;font-family:sans-serif;}
+#crosshair{position:fixed;left:50%;top:50%;width:10px;height:10px;transform:translate(-50%,-50%);}
+#crosshair:before,#crosshair:after{content:"";position:absolute;background:white;}
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
 </style>
@@ -38,74 +25,104 @@ body{margin:0;overflow:hidden;background:black;}
 <script>
 
 // ===== SCENE =====
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer();
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff,0.8));
 
 // ===== CONTROLS =====
-const controls = new THREE.PointerLockControls(camera, document.body);
+const controls=new THREE.PointerLockControls(camera,document.body);
 scene.add(controls.getObject());
 
-const overlay = document.getElementById("overlay");
-
-overlay.addEventListener("click", () => {
- controls.lock();
-});
-
-controls.addEventListener("lock", () => {
- overlay.style.display = "none";
-});
-
-controls.addEventListener("unlock", () => {
- overlay.style.display = "flex";
-});
+overlay.onclick=()=>controls.lock();
+controls.addEventListener("lock",()=>overlay.style.display="none");
+controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
-const keys = {};
-
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+const keys={};
+onkeydown=e=>keys[e.code]=true;
+onkeyup=e=>keys[e.code]=false;
 
 // ===== PLAYER =====
-let vy = 0;
-let onGround = false;
+let vy=0,onGround=false;
+const gravity=-0.02,jump=0.35,speed=0.12;
 
-const gravity = -0.02;
-const jump = 0.35;
+camera.position.set(0,10,10);
 
-camera.position.set(0,5,5);
+// ===== MATERIALS =====
+const mats={
+ grass:new THREE.MeshLambertMaterial({color:0x55aa55}),
+ dirt:new THREE.MeshLambertMaterial({color:0x8B4513}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888}),
+ coal:new THREE.MeshLambertMaterial({color:0x222222}),
+ iron:new THREE.MeshLambertMaterial({color:0xc2b280})
+};
+
+const geo=new THREE.BoxGeometry(1,1,1);
 
 // ===== WORLD =====
-const blocks = [];
-const geo = new THREE.BoxGeometry(1,1,1);
-const mat = new THREE.MeshLambertMaterial({color:0x55aa55});
+const world=new Map();
+const key=(x,y,z)=>`${x},${y},${z}`;
 
-// flat ground
+function add(x,y,z,type){
+ world.set(key(x,y,z),type);
+ const m=new THREE.Mesh(geo,mats[type]);
+ m.position.set(x,y,z);
+ scene.add(m);
+}
+
+// terrain height
+function height(x,z){
+ return Math.floor(
+  Math.sin(x*0.2)*2 +
+  Math.cos(z*0.2)*2
+ );
+}
+
+// generate world
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
-  for(let y=0;y<3;y++){
-   const cube = new THREE.Mesh(geo,mat);
-   cube.position.set(x,y,z);
-   scene.add(cube);
-   blocks.push(cube);
+
+  let h=height(x,z)+5;
+
+  // grass top
+  add(x,h,z,"grass");
+
+  // dirt layers
+  for(let y=h-1;y>h-5;y--){
+   add(x,y,z,"dirt");
+  }
+
+  // stone + ores
+  for(let y=h-5;y>-20;y--){
+   let type="stone";
+
+   if(Math.random()<0.05) type="coal";
+   if(Math.random()<0.02) type="iron";
+
+   add(x,y,z,type);
   }
  }
 }
 
 // ===== COLLISION =====
+function solid(x,y,z){
+ return world.has(key(x,y,z));
+}
+
 function collide(px,py,pz){
- for(const b of blocks){
-  if(Math.abs(px-b.position.x)<0.5 &&
-     Math.abs(py-b.position.y)<1.8 &&
-     Math.abs(pz-b.position.z)<0.5){
-     return true;
+ const w=0.3,h=1.8;
+
+ for(let x=Math.floor(px-w);x<=Math.floor(px+w);x++){
+  for(let y=Math.floor(py);y<=Math.floor(py+h);y++){
+   for(let z=Math.floor(pz-w);z<=Math.floor(pz+w);z++){
+    if(solid(x,y,z)) return true;
+   }
   }
  }
  return false;
@@ -115,51 +132,47 @@ function collide(px,py,pz){
 function animate(){
  requestAnimationFrame(animate);
 
- const speed = 0.15;
+ const f=new THREE.Vector3();
+ camera.getWorldDirection(f);f.y=0;f.normalize();
 
- const forward = new THREE.Vector3();
- camera.getWorldDirection(forward);
- forward.y = 0;
- forward.normalize();
+ const r=new THREE.Vector3();
+ r.crossVectors(f,new THREE.Vector3(0,1,0)).normalize();
 
- const right = new THREE.Vector3();
- right.crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
+ let dx=0,dz=0;
 
- let nx = camera.position.x;
- let nz = camera.position.z;
+ if(keys["KeyW"]){dx+=f.x*speed;dz+=f.z*speed;}
+ if(keys["KeyS"]){dx-=f.x*speed;dz-=f.z*speed;}
+ if(keys["KeyA"]){dx-=r.x*speed;dz-=r.z*speed;}
+ if(keys["KeyD"]){dx+=r.x*speed;dz+=r.z*speed;}
 
- if(keys["KeyW"]){nx += forward.x * speed; nz += forward.z * speed;}
- if(keys["KeyS"]){nx -= forward.x * speed; nz -= forward.z * speed;}
- if(keys["KeyA"]){nx -= right.x * speed; nz -= right.z * speed;}
- if(keys["KeyD"]){nx += right.x * speed; nz += right.z * speed;}
+ let nx=camera.position.x+dx;
+ let nz=camera.position.z+dz;
 
  if(!collide(nx,camera.position.y-1.6,camera.position.z)){
-  camera.position.x = nx;
+  camera.position.x=nx;
  }
  if(!collide(camera.position.x,camera.position.y-1.6,nz)){
-  camera.position.z = nz;
+  camera.position.z=nz;
  }
 
  // gravity
- vy += gravity;
- let ny = camera.position.y + vy;
+ vy+=gravity;
+ let ny=camera.position.y+vy;
 
- if(vy <= 0){
+ if(vy<=0){
   if(collide(camera.position.x,ny-1.6,camera.position.z)){
-   camera.position.y = Math.floor(ny-1.6)+2.6;
-   vy = 0;
-   onGround = true;
+   camera.position.y=Math.floor(ny-1.6)+2.6;
+   vy=0;
+   onGround=true;
   } else {
-   camera.position.y = ny;
-   onGround = false;
+   camera.position.y=ny;
+   onGround=false;
   }
- } else {
-  camera.position.y = ny;
- }
+ } else camera.position.y=ny;
 
- if(keys["Space"] && onGround){
-  vy = jump;
-  onGround = false;
+ if(keys["Space"]&&onGround){
+  vy=jump;
+  onGround=false;
  }
 
  renderer.render(scene,camera);
@@ -168,8 +181,8 @@ function animate(){
 animate();
 
 // resize
-window.addEventListener("resize",()=>{
- camera.aspect = innerWidth/innerHeight;
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();
  renderer.setSize(innerWidth,innerHeight);
 });
