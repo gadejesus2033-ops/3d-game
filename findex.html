@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game - Minecraft Style Breaking</title>
+<title>Voxel Game - 1 Second Break</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -182,11 +182,11 @@ const toolData={
 
 // ===== BLOCK RULES =====
 const blockRules={
- grass:{tool:null,hardness:1},
- dirt:{tool:null,hardness:1},
- leaves:{tool:null,hardness:0.5},
- wood:{tool:"axe",hardness:2},
- stone:{tool:"pickaxe",hardness:3}
+ grass:{tool:null},
+ dirt:{tool:null},
+ leaves:{tool:null},
+ wood:{tool:"axe"},
+ stone:{tool:"pickaxe"}
 };
 
 // ===== RAY =====
@@ -199,9 +199,10 @@ function getTarget(){
  return hits.length?hits[0]:null;
 }
 
-// ===== MINECRAFT BREAK SYSTEM =====
+// ===== 1 SECOND BREAK SYSTEM =====
 let breakProgress=0;
 let targetBlock=null;
+const BREAK_TIME=1.0;
 
 function updateBreak(){
 
@@ -238,13 +239,15 @@ function updateBreak(){
   return;
  }
 
- let speed=0.02;
- if(tool) speed*=tool.speed;
- else speed*=0.5;
+ const delta=1/60;
 
- breakProgress+=speed;
+ let speed=1;
+ if(tool) speed=tool.speed;
+ else speed=0.5;
 
- if(breakProgress>=rule.hardness){
+ breakProgress += (delta*speed)/BREAK_TIME;
+
+ if(breakProgress>=1){
   inv[block]=(inv[block]||0)+1;
   remove(p.x,p.y,p.z);
   breakProgress=0;
