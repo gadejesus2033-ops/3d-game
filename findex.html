@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Trees + Inventory</title>
+<title>Voxel Game Tools + Forest</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -47,7 +47,6 @@ controls.addEventListener("unlock",()=>overlay.style.display="flex");
 
 // ===== INPUT =====
 const keys={};
-
 onkeydown=e=>keys[e.code]=true;
 onkeyup=e=>keys[e.code]=false;
 
@@ -55,21 +54,18 @@ onkeyup=e=>keys[e.code]=false;
 let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
 
-camera.position.set(0,12,10);
+camera.position.set(0,15,10);
 
-// ===== 4x4 TEXTURE =====
+// ===== TEXTURES =====
 function tex(colors){
  const c=document.createElement("canvas");
  c.width=4;c.height=4;
  const ctx=c.getContext("2d");
-
- for(let x=0;x<4;x++){
-  for(let y=0;y<4;y++){
-   ctx.fillStyle=colors[Math.floor(Math.random()*colors.length)];
-   ctx.fillRect(x,y,1,1);
-  }
+ for(let x=0;x<4;x++)
+ for(let y=0;y<4;y++){
+  ctx.fillStyle=colors[Math.floor(Math.random()*colors.length)];
+  ctx.fillRect(x,y,1,1);
  }
-
  const t=new THREE.CanvasTexture(c);
  t.magFilter=t.minFilter=THREE.NearestFilter;
  return t;
@@ -111,21 +107,31 @@ function remove(x,y,z){
  }
 }
 
-// terrain + trees
+// terrain height
+function height(x,z){
+ return Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2);
+}
+
+// generate world
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
 
-  let h=Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2)+5;
+  let h=height(x,z)+6;
 
   add(x,h,z,"grass");
 
   for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
-  for(let y=h-4;y>-10;y--) add(x,y,z,"stone");
+  for(let y=h-4;y>-20;y--) add(x,y,z,"stone");
 
-  // trees
-  if(Math.random()<0.08){
+  // ===== FOREST ZONES =====
+  let forest=Math.sin(x*0.08)+Math.cos(z*0.08);
+
+  if(forest>0.6 && Math.random()<0.12){
+
+   // trunk
    for(let i=1;i<=4;i++) add(x,h+i,z,"wood");
 
+   // leaves
    for(let dx=-2;dx<=2;dx++)
    for(let dz=-2;dz<=2;dz++)
    for(let dy=3;dy<=5;dy++)
@@ -136,8 +142,12 @@ for(let x=-25;x<25;x++){
  }
 }
 
-// ===== INVENTORY =====
-const inv={grass:0,dirt:0,stone:0,wood:0,leaves:0};
+// ===== INVENTORY + TOOLS =====
+const inv={
+ grass:0,dirt:0,stone:0,wood:0,leaves:0,
+ pickaxe:1,axe:1
+};
+
 const items=Object.keys(inv);
 let selected=0;
 
@@ -145,14 +155,17 @@ addEventListener("wheel",e=>{
  selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
 });
 
-// ===== COLLISION =====
-function solid(x,y,z){return world.has(key(x,y,z));}
+addEventListener("keydown",e=>{
+ if(e.code==="Digit1") selected=0;
+ if(e.code==="Digit2") selected=1;
+ if(e.code==="Digit3") selected=2;
+});
 
-function collide(px,py,pz){
- for(let x=Math.floor(px-0.3);x<=Math.floor(px+0.3);x++)
- for(let y=Math.floor(py);y<=Math.floor(py+1.8);y++)
- for(let z=Math.floor(pz-0.3);z<=Math.floor(pz+0.3);z++)
-  if(solid(x,y,z)) return true;
+// ===== TOOL RULES =====
+function canBreak(block,tool){
+ if(block==="stone") return tool==="pickaxe";
+ if(block==="wood") return tool==="axe";
+ if(block==="grass"||block==="dirt"||block==="leaves") return true;
  return false;
 }
 
@@ -174,12 +187,13 @@ document.addEventListener("mousedown",e=>{
 
   const p=hit.object.position;
   const k=key(p.x,p.y,p.z);
-  const t=world.get(k);
+  const block=world.get(k);
+  const tool=items[selected];
 
-  if(t){
-   inv[t]++;
-   remove(p.x,p.y,p.z);
-  }
+  if(!canBreak(block,tool)) return;
+
+  inv[block]=(inv[block]||0)+1;
+  remove(p.x,p.y,p.z);
  }
 });
 
@@ -206,6 +220,17 @@ document.addEventListener("mousedown",e=>{
   }
  }
 });
+
+// ===== COLLISION =====
+function solid(x,y,z){return world.has(key(x,y,z));}
+
+function collide(px,py,pz){
+ for(let x=Math.floor(px-0.3);x<=Math.floor(px+0.3);x++)
+ for(let y=Math.floor(py);y<=Math.floor(py+1.8);y++)
+ for(let z=Math.floor(pz-0.3);z<=Math.floor(pz+0.3);z++)
+  if(solid(x,y,z)) return true;
+ return false;
+}
 
 // ===== LOOP =====
 function animate(){
@@ -252,7 +277,9 @@ function animate(){
  }
 
  // HUD
- hud.innerText="Block: "+items[selected]+" | "+inv[items[selected]];
+ hud.innerText=
+ "Selected: "+items[selected]+
+ " ("+inv[items[selected]]+")";
 
  renderer.render(scene,camera);
 }
