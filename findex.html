@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Final</title>
+<title>Voxel Game Fixed</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;font-family:sans-serif;}
@@ -67,7 +67,7 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer=new THREE.WebGLRenderer({antialias:false});
+const renderer=new THREE.WebGLRenderer();
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
@@ -75,7 +75,8 @@ scene.add(new THREE.AmbientLight(0xffffff,0.8));
 
 // ===== CONTROLS =====
 const controls=new THREE.PointerLockControls(camera,document.body);
-scene.add(controls.getObject());
+const player = controls.getObject();
+scene.add(player);
 
 overlay.onclick=()=>controls.lock();
 controls.addEventListener("lock",()=>overlay.style.display="none");
@@ -97,7 +98,6 @@ addEventListener("mouseup",e=>{
 // ===== PLAYER =====
 let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
-camera.position.set(0,12,10);
 
 // ===== TEXTURES =====
 function tex(colors){
@@ -149,7 +149,7 @@ function remove(x,y,z){
  }
 }
 
-// terrain (same feel)
+// ===== TERRAIN =====
 function height(x,z){
  return Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2);
 }
@@ -162,17 +162,20 @@ for(let x=-25;x<25;x++){
   add(x,h,z,"grass");
   for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
   for(let y=h-4;y>-15;y--) add(x,y,z,"stone");
-
-  if(Math.random()<0.08){
-   for(let i=1;i<=4;i++) add(x,h+i,z,"wood");
-   for(let dx=-2;dx<=2;dx++)
-   for(let dz=-2;dz<=2;dz++)
-   for(let dy=3;dy<=5;dy++)
-    if(Math.random()>0.3)
-     add(x+dx,h+dy,z+dz,"leaves");
-  }
  }
 }
+
+// ===== SPAWN ON GROUND =====
+function getGroundY(x,z){
+ for(let y=50;y>-50;y--){
+  if(world.has(key(x,y,z))){
+   return y+2.6;
+  }
+ }
+ return 10;
+}
+
+player.position.set(0,getGroundY(0,0),0);
 
 // ===== INVENTORY =====
 const inv={
@@ -206,25 +209,18 @@ addEventListener("wheel",e=>{
  selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
 });
 
-addEventListener("keydown",e=>{
- if(e.code.startsWith("Digit")){
-  let n=parseInt(e.code.replace("Digit",""))-1;
-  if(n>=0 && n<items.length) selected=n;
- }
-});
-
 // ===== TOOLS =====
 const toolData={
- wooden_pickaxe:{type:"pickaxe",speed:1},
- wooden_axe:{type:"axe",speed:1.5}
+ wooden_pickaxe:{type:"pickaxe"},
+ wooden_axe:{type:"axe"}
 };
 
 const blockRules={
+ wood:{tool:"axe"},
+ stone:{tool:"pickaxe"},
  grass:{tool:null},
  dirt:{tool:null},
- leaves:{tool:null},
- wood:{tool:"axe"},
- stone:{tool:"pickaxe"}
+ leaves:{tool:null}
 };
 
 // ===== RAY =====
@@ -236,7 +232,7 @@ function getTarget(){
  return ray.intersectObjects([...meshes.values()])[0];
 }
 
-// ===== BREAK SYSTEM (REAL 1 SECOND) =====
+// ===== BREAK =====
 let breakProgress=0;
 let targetBlock=null;
 let last=performance.now();
@@ -247,17 +243,10 @@ function updateBreak(){
  const delta=(now-last)/1000;
  last=now;
 
- if(!mouseDown){
-  breakProgress=0;
-  targetBlock=null;
-  return;
- }
+ if(!mouseDown){breakProgress=0;targetBlock=null;return;}
 
  const hit=getTarget();
- if(!hit){
-  breakProgress=0;
-  return;
- }
+ if(!hit){breakProgress=0;return;}
 
  const p=hit.object.position;
  const k=key(p.x,p.y,p.z);
@@ -269,7 +258,6 @@ function updateBreak(){
 
  const block=world.get(k);
  const rule=blockRules[block];
-
  const tool=toolData[items[selected]];
 
  if(rule.tool && (!tool || tool.type!==rule.tool)){
@@ -291,58 +279,12 @@ function updateBreak(){
 
 }
 
-// ===== PLACE =====
-addEventListener("contextmenu",e=>e.preventDefault());
-
-addEventListener("mousedown",e=>{
- if(e.button===2){
-
-  const hit=getTarget();
-  if(!hit) return;
-
-  const type=items[selected];
-
-  if(!["grass","dirt","stone","wood","leaves"].includes(type)) return;
-  if(inv[type]<=0) return;
-
-  const n=hit.face.normal;
-  const p=hit.object.position;
-
-  add(p.x+n.x,p.y+n.y,p.z+n.z,type);
-  inv[type]--;
- }
-});
-
-// ===== CRAFTING =====
-addEventListener("keydown",e=>{
- if(e.code==="KeyE"){
-
-  if(inv.stone>=3 && inv.wood>=2){
-   inv.stone-=3;
-   inv.wood-=2;
-   inv.wooden_pickaxe++;
-   alert("Crafted Pickaxe!");
-   return;
-  }
-
-  if(inv.wood>=3 && inv.stone>=2){
-   inv.wood-=3;
-   inv.stone-=2;
-   inv.wooden_axe++;
-   alert("Crafted Axe!");
-   return;
-  }
-
-  alert("Not enough materials!");
- }
-});
-
 // ===== COLLISION =====
 function solid(x,y,z){return world.has(key(x,y,z));}
 
 function collide(px,py,pz){
  for(let x=Math.floor(px-0.3);x<=Math.floor(px+0.3);x++)
- for(let y=Math.floor(py);y<=Math.floor(py+1.8);y++)
+ for(let y=Math.floor(py+0.1);y<=Math.floor(py+1.8);y++)
  for(let z=Math.floor(pz-0.3);z<=Math.floor(pz+0.3);z++)
   if(solid(x,y,z)) return true;
  return false;
@@ -355,7 +297,7 @@ function animate(){
  updateBreak();
  updateHotbar();
 
- const speed=keys["ShiftLeft"]?0.2:0.12;
+ const speed=0.12;
 
  const f=new THREE.Vector3();
  camera.getWorldDirection(f);f.y=0;f.normalize();
@@ -370,24 +312,24 @@ function animate(){
  if(keys["KeyA"]){dx-=r.x*speed;dz-=r.z*speed;}
  if(keys["KeyD"]){dx+=r.x*speed;dz+=r.z*speed;}
 
- let nx=camera.position.x+dx;
- let nz=camera.position.z+dz;
+ let nx=player.position.x+dx;
+ let nz=player.position.z+dz;
 
- if(!collide(nx,camera.position.y-1.6,camera.position.z))
-  camera.position.x=nx;
+ if(!collide(nx,player.position.y-1.6,player.position.z))
+  player.position.x=nx;
 
- if(!collide(camera.position.x,camera.position.y-1.6,nz))
-  camera.position.z=nz;
+ if(!collide(player.position.x,player.position.y-1.6,nz))
+  player.position.z=nz;
 
  vy+=gravity;
- let ny=camera.position.y+vy;
+ let ny=player.position.y+vy;
 
  if(vy<=0){
-  if(collide(camera.position.x,ny-1.6,camera.position.z)){
-   camera.position.y=Math.floor(ny-1.6)+2.6;
+  if(collide(player.position.x,ny-1.6,player.position.z)){
+   player.position.y=Math.floor(ny-1.6)+2.6;
    vy=0;onGround=true;
-  } else camera.position.y=ny;
- } else camera.position.y=ny;
+  } else player.position.y=ny;
+ } else player.position.y=ny;
 
  if(keys["Space"]&&onGround){
   vy=jump;
