@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game + Hotbar</title>
+<title>Voxel Game Final</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;font-family:sans-serif;}
@@ -42,12 +42,12 @@ body{margin:0;overflow:hidden;background:black;font-family:sans-serif;}
  justify-content:center;
  color:white;
  font-size:12px;
+ white-space:pre;
 }
 
 .selected{
  border:3px solid yellow;
 }
-
 </style>
 </head>
 
@@ -67,7 +67,7 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
 
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer=new THREE.WebGLRenderer();
+const renderer=new THREE.WebGLRenderer({antialias:false});
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
@@ -97,27 +97,28 @@ addEventListener("mouseup",e=>{
 // ===== PLAYER =====
 let vy=0,onGround=false;
 const gravity=-0.02,jump=0.35;
-camera.position.set(0,15,10);
+camera.position.set(0,12,10);
 
 // ===== TEXTURES =====
-function tex(c){
- const canvas=document.createElement("canvas");
- canvas.width=4;canvas.height=4;
- const ctx=canvas.getContext("2d");
+function tex(colors){
+ const c=document.createElement("canvas");
+ c.width=4;c.height=4;
+ const ctx=c.getContext("2d");
  for(let x=0;x<4;x++)
  for(let y=0;y<4;y++){
-  ctx.fillStyle=c[Math.floor(Math.random()*c.length)];
+  ctx.fillStyle=colors[Math.floor(Math.random()*colors.length)];
   ctx.fillRect(x,y,1,1);
  }
- const t=new THREE.CanvasTexture(canvas);
+ const t=new THREE.CanvasTexture(c);
  t.magFilter=t.minFilter=THREE.NearestFilter;
  return t;
 }
 
+// ===== MATERIALS =====
 const mats={
  grass:new THREE.MeshLambertMaterial({map:tex(["#55aa55","#4c9c4c"])}),
  dirt:new THREE.MeshLambertMaterial({map:tex(["#8B4513"])}),
- stone:new THREE.MeshLambertMaterial({map:tex(["#888"])}),
+ stone:new THREE.MeshLambertMaterial({map:tex(["#888","#777"])}),
  wood:new THREE.MeshLambertMaterial({map:tex(["#8b5a2b"])}),
  leaves:new THREE.MeshLambertMaterial({map:tex(["#2e8b57"])})
 };
@@ -148,11 +149,28 @@ function remove(x,y,z){
  }
 }
 
-// terrain
+// terrain (same feel)
+function height(x,z){
+ return Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2);
+}
+
 for(let x=-25;x<25;x++){
  for(let z=-25;z<25;z++){
-  add(x,0,z,"grass");
-  for(let y=-1;y>-10;y--) add(x,y,z,"stone");
+
+  let h=height(x,z)+6;
+
+  add(x,h,z,"grass");
+  for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
+  for(let y=h-4;y>-15;y--) add(x,y,z,"stone");
+
+  if(Math.random()<0.08){
+   for(let i=1;i<=4;i++) add(x,h+i,z,"wood");
+   for(let dx=-2;dx<=2;dx++)
+   for(let dz=-2;dz<=2;dz++)
+   for(let dy=3;dy<=5;dy++)
+    if(Math.random()>0.3)
+     add(x+dx,h+dy,z+dz,"leaves");
+  }
  }
 }
 
@@ -171,7 +189,7 @@ const items=[
 
 let selected=0;
 
-// ===== HOTBAR UI =====
+// ===== HOTBAR =====
 const hotbar=document.getElementById("hotbar");
 
 function updateHotbar(){
@@ -184,10 +202,10 @@ function updateHotbar(){
  });
 }
 
-// scroll + keys
 addEventListener("wheel",e=>{
  selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
 });
+
 addEventListener("keydown",e=>{
  if(e.code.startsWith("Digit")){
   let n=parseInt(e.code.replace("Digit",""))-1;
@@ -195,10 +213,10 @@ addEventListener("keydown",e=>{
  }
 });
 
-// ===== TOOL RULES =====
+// ===== TOOLS =====
 const toolData={
- wooden_pickaxe:{type:"pickaxe"},
- wooden_axe:{type:"axe"}
+ wooden_pickaxe:{type:"pickaxe",speed:1},
+ wooden_axe:{type:"axe",speed:1.5}
 };
 
 const blockRules={
@@ -218,7 +236,7 @@ function getTarget(){
  return ray.intersectObjects([...meshes.values()])[0];
 }
 
-// ===== BREAK =====
+// ===== BREAK SYSTEM (REAL 1 SECOND) =====
 let breakProgress=0;
 let targetBlock=null;
 let last=performance.now();
@@ -229,10 +247,17 @@ function updateBreak(){
  const delta=(now-last)/1000;
  last=now;
 
- if(!mouseDown){breakProgress=0;targetBlock=null;return;}
+ if(!mouseDown){
+  breakProgress=0;
+  targetBlock=null;
+  return;
+ }
 
  const hit=getTarget();
- if(!hit){breakProgress=0;return;}
+ if(!hit){
+  breakProgress=0;
+  return;
+ }
 
  const p=hit.object.position;
  const k=key(p.x,p.y,p.z);
@@ -288,12 +313,86 @@ addEventListener("mousedown",e=>{
  }
 });
 
+// ===== CRAFTING =====
+addEventListener("keydown",e=>{
+ if(e.code==="KeyE"){
+
+  if(inv.stone>=3 && inv.wood>=2){
+   inv.stone-=3;
+   inv.wood-=2;
+   inv.wooden_pickaxe++;
+   alert("Crafted Pickaxe!");
+   return;
+  }
+
+  if(inv.wood>=3 && inv.stone>=2){
+   inv.wood-=3;
+   inv.stone-=2;
+   inv.wooden_axe++;
+   alert("Crafted Axe!");
+   return;
+  }
+
+  alert("Not enough materials!");
+ }
+});
+
+// ===== COLLISION =====
+function solid(x,y,z){return world.has(key(x,y,z));}
+
+function collide(px,py,pz){
+ for(let x=Math.floor(px-0.3);x<=Math.floor(px+0.3);x++)
+ for(let y=Math.floor(py);y<=Math.floor(py+1.8);y++)
+ for(let z=Math.floor(pz-0.3);z<=Math.floor(pz+0.3);z++)
+  if(solid(x,y,z)) return true;
+ return false;
+}
+
 // ===== LOOP =====
 function animate(){
  requestAnimationFrame(animate);
 
  updateBreak();
  updateHotbar();
+
+ const speed=keys["ShiftLeft"]?0.2:0.12;
+
+ const f=new THREE.Vector3();
+ camera.getWorldDirection(f);f.y=0;f.normalize();
+
+ const r=new THREE.Vector3();
+ r.crossVectors(f,new THREE.Vector3(0,1,0)).normalize();
+
+ let dx=0,dz=0;
+
+ if(keys["KeyW"]){dx+=f.x*speed;dz+=f.z*speed;}
+ if(keys["KeyS"]){dx-=f.x*speed;dz-=f.z*speed;}
+ if(keys["KeyA"]){dx-=r.x*speed;dz-=r.z*speed;}
+ if(keys["KeyD"]){dx+=r.x*speed;dz+=r.z*speed;}
+
+ let nx=camera.position.x+dx;
+ let nz=camera.position.z+dz;
+
+ if(!collide(nx,camera.position.y-1.6,camera.position.z))
+  camera.position.x=nx;
+
+ if(!collide(camera.position.x,camera.position.y-1.6,nz))
+  camera.position.z=nz;
+
+ vy+=gravity;
+ let ny=camera.position.y+vy;
+
+ if(vy<=0){
+  if(collide(camera.position.x,ny-1.6,camera.position.z)){
+   camera.position.y=Math.floor(ny-1.6)+2.6;
+   vy=0;onGround=true;
+  } else camera.position.y=ny;
+ } else camera.position.y=ny;
+
+ if(keys["Space"]&&onGround){
+  vy=jump;
+  onGround=false;
+ }
 
  renderer.render(scene,camera);
 }
