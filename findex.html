@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Minecraft Tools</title>
+<title>Voxel Game Final</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;}
@@ -98,7 +98,6 @@ const key=(x,y,z)=>`${x},${y},${z}`;
 function add(x,y,z,t){
  const k=key(x,y,z);
  if(world.has(k)) return;
-
  world.set(k,t);
  const m=new THREE.Mesh(geo,mats[t]);
  m.position.set(x,y,z);
@@ -129,7 +128,6 @@ for(let x=-25;x<25;x++){
   for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
   for(let y=h-4;y>-20;y--) add(x,y,z,"stone");
 
-  // forest zones
   let forest=Math.sin(x*0.08)+Math.cos(z*0.08);
   if(forest>0.6 && Math.random()<0.12){
 
@@ -151,12 +149,30 @@ const inv={
  wooden_axe:1
 };
 
-const items=Object.keys(inv);
+const items=[
+ "grass","dirt","stone",
+ "wood","leaves",
+ "wooden_pickaxe","wooden_axe"
+];
+
 let selected=0;
 
 addEventListener("wheel",e=>{
  selected=(selected+(e.deltaY>0?1:-1)+items.length)%items.length;
 });
+
+addEventListener("keydown",e=>{
+ if(e.code==="Digit1") selected=0;
+ if(e.code==="Digit2") selected=1;
+ if(e.code==="Digit3") selected=2;
+ if(e.code==="Digit4") selected=3;
+ if(e.code==="Digit5") selected=4;
+ if(e.code==="Digit6") selected=5;
+ if(e.code==="Digit7") selected=6;
+});
+
+// ===== PLACEABLE =====
+const placeable=["grass","dirt","stone","wood","leaves"];
 
 // ===== TOOL DATA =====
 const toolData={
@@ -183,7 +199,7 @@ function getTarget(){
  return hits.length?hits[0]:null;
 }
 
-// ===== BREAK SYSTEM =====
+// ===== BREAK =====
 let breakProgress=0;
 
 function updateBreak(){
@@ -226,8 +242,14 @@ document.addEventListener("contextmenu",e=>e.preventDefault());
 
 document.addEventListener("mousedown",e=>{
  if(e.button===2){
+
   const hit=getTarget();
   if(!hit) return;
+
+  const type=items[selected];
+
+  if(!placeable.includes(type)) return;
+  if(inv[type]<=0) return;
 
   const n=hit.face.normal;
   const p=hit.object.position;
@@ -236,9 +258,7 @@ document.addEventListener("mousedown",e=>{
   const y=p.y+n.y;
   const z=p.z+n.z;
 
-  const type=items[selected];
-
-  if(inv[type]>0 && !world.has(key(x,y,z))){
+  if(!world.has(key(x,y,z))){
    add(x,y,z,type);
    inv[type]--;
   }
@@ -301,7 +321,7 @@ function animate(){
   onGround=false;
  }
 
- hud.innerText="Selected: "+items[selected]+" | "+inv[items[selected]];
+ hud.innerText="Slot "+(selected+1)+": "+items[selected]+" ("+inv[items[selected]]+")";
 
  renderer.render(scene,camera);
 }
