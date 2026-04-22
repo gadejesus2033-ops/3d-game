@@ -2,19 +2,64 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Voxel Game Final Fixed</title>
+<title>Voxel Game Final</title>
 
 <style>
 body{margin:0;overflow:hidden;background:black;font-family:sans-serif;}
-#overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;background:black;cursor:pointer;}
-#crosshair{position:fixed;left:50%;top:50%;width:10px;height:10px;transform:translate(-50%,-50%);}
-#crosshair:before,#crosshair:after{content:"";position:absolute;background:white;}
+
+#overlay{
+ position:absolute;inset:0;
+ display:flex;align-items:center;justify-content:center;
+ color:white;background:black;cursor:pointer;
+}
+
+#crosshair{
+ position:fixed;left:50%;top:50%;
+ width:10px;height:10px;
+ transform:translate(-50%,-50%);
+}
+#crosshair:before,#crosshair:after{
+ content:"";position:absolute;background:white;
+}
 #crosshair:before{width:10px;height:2px;top:4px;}
 #crosshair:after{width:2px;height:10px;left:4px;}
 
-#hotbar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:6px;}
-.slot{width:50px;height:50px;border:2px solid white;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;white-space:pre;}
+#hotbar{
+ position:fixed;
+ bottom:20px;
+ left:50%;
+ transform:translateX(-50%);
+ display:flex;
+ gap:6px;
+}
+
+.slot{
+ width:50px;height:50px;
+ border:2px solid white;
+ background:rgba(0,0,0,0.5);
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ color:white;
+ font-size:12px;
+ white-space:pre;
+}
+
 .selected{border:3px solid yellow;}
+
+#msg{
+ position:fixed;
+ top:20px;
+ left:50%;
+ transform:translateX(-50%);
+ color:white;
+ background:rgba(0,0,0,0.7);
+ padding:10px 20px;
+ border-radius:5px;
+ font-size:14px;
+ opacity:0;
+ transition:opacity 0.2s;
+}
 </style>
 </head>
 
@@ -23,11 +68,20 @@ body{margin:0;overflow:hidden;background:black;font-family:sans-serif;}
 <div id="overlay">CLICK TO START</div>
 <div id="crosshair"></div>
 <div id="hotbar"></div>
+<div id="msg"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
+
+// ===== MESSAGE SYSTEM =====
+const msg = document.getElementById("msg");
+function showMsg(text){
+ msg.innerText = text;
+ msg.style.opacity = 1;
+ setTimeout(()=>msg.style.opacity=0,1500);
+}
 
 // ===== SCENE =====
 const scene=new THREE.Scene();
@@ -81,7 +135,6 @@ function tex(colors){
  return t;
 }
 
-// ===== MATERIALS =====
 const mats={
  grass:new THREE.MeshLambertMaterial({map:tex(["#55aa55","#4c9c4c"])}),
  dirt:new THREE.MeshLambertMaterial({map:tex(["#8B4513"])}),
@@ -116,7 +169,7 @@ function remove(x,y,z){
  }
 }
 
-// ===== TERRAIN + CAVES + TREES =====
+// ===== TERRAIN =====
 function height(x,z){
  return Math.floor(Math.sin(x*0.2)*2+Math.cos(z*0.2)*2);
 }
@@ -131,15 +184,13 @@ for(let x=-25;x<25;x++){
   for(let y=h-1;y>h-4;y--) add(x,y,z,"dirt");
 
   for(let y=h-4;y>-20;y--){
-   if(Math.random()<0.08) continue; // caves
+   if(Math.random()<0.08) continue;
    add(x,y,z,"stone");
   }
 
-  // 🌲 FOREST PATCHES (FIXED)
   let forest = Math.sin(x*0.1) + Math.cos(z*0.1);
 
-  if(forest > 1.2 && Math.random()<0.15){
-
+  if(forest>1.2 && Math.random()<0.15){
    for(let i=1;i<=4;i++) add(x,h+i,z,"wood");
 
    for(let dx=-2;dx<=2;dx++)
@@ -271,7 +322,7 @@ addEventListener("keydown",e=>{
    inv.stone-=3;
    inv.wood-=2;
    inv.wooden_pickaxe++;
-   alert("Pickaxe crafted");
+   showMsg("Pickaxe crafted");
    return;
   }
 
@@ -279,11 +330,11 @@ addEventListener("keydown",e=>{
    inv.wood-=3;
    inv.stone-=2;
    inv.wooden_axe++;
-   alert("Axe crafted");
+   showMsg("Axe crafted");
    return;
   }
 
-  alert("Not enough materials");
+  showMsg("Not enough materials");
  }
 });
 
